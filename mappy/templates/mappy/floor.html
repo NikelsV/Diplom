@@ -1,0 +1,761 @@
+{% extends "mappy/base.html" %}
+{% load static %}
+
+{% block title %}WebMap — Этаж{% endblock %}
+
+{% block extra_css %}
+<style>
+    .content { max-width: 100%; padding: 12px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="map-container" style="padding:12px;">
+    <div class="map-header">
+        <h1 id="floorTitle">Этаж</h1>
+        <div class="breadcrumb" id="breadcrumb"></div>
+    </div>
+    <div class="floor-editor">
+        <div style="flex:1;display:flex;flex-direction:column;">
+            <div class="toolbar" id="toolbar">
+                <label class="upload-btn" title="Загрузить карту этажа">
+                    📁 Загрузить карту
+                    <input type="file" id="mapUpload" accept="image/*" style="display:none;">
+                </label>
+                <button id="btnAddDevice" title="Добавить устройство">➕ Устройство</button>
+                <button id="btnAddConnection" title="Режим связывания">🔗 Связь</button>
+                <button id="btnDelete" title="Удалить выбранное">🗑 Удалить</button>
+                <span id="modeLabel" style="margin-left:auto;font-size:.85rem;color:#888;"></span>
+            </div>
+            <div class="canvas-area" id="canvasArea">
+                <div id="konvaContainer" style="width:100%;height:100%;"></div>
+            </div>
+        </div>
+        <div class="side-panel" id="sidePanel">
+            <h3>Свойства устройства</h3>
+            <div id="deviceForm">
+                <div class="field-group">
+                    <label>Тип устройства</label>
+                    <select id="fDeviceType"></select>
+                </div>
+                <div class="field-group">
+                    <label>Название</label>
+                    <input id="fName" type="text">
+                </div>
+                <div class="field-group">
+                    <label>Модель</label>
+                    <input id="fModel" type="text">
+                </div>
+                <div class="field-group">
+                    <label>IP адрес</label>
+                    <input id="fIP" type="text" placeholder="192.168.1.1">
+                </div>
+                <div class="field-group">
+                    <label>MAC адрес</label>
+                    <input id="fMAC" type="text" placeholder="AA:BB:CC:DD:EE:FF">
+                </div>
+                <div class="field-group">
+                    <label>Описание</label>
+                    <textarea id="fDesc"></textarea>
+                </div>
+                <div class="field-group">
+                    <label>Ответственное лицо</label>
+                    <input id="fPerson" type="text">
+                </div>
+                <div class="field-group">
+                    <label>Контактные данные</label>
+                    <input id="fContact" type="text">
+                </div>
+            </div>
+            <div style="margin-top:8px;font-size:.78rem;color:#999;">Изменения сохраняются автоматически</div>
+        </div>
+    </div>
+</div>
+
+<!-- Модалка выбора типа устройства при добавлении -->
+<div id="addDeviceModal" class="modal-overlay" style="display:none;">
+    <div class="modal-box">
+        <h2>Добавить устройство</h2>
+        <div class="field-group">
+            <label>Тип устройства</label>
+            <select id="newDeviceType"></select>
+        </div>
+        <div class="field-group">
+            <label>Название</label>
+            <input id="newDeviceName" type="text" placeholder="Новое устройство">
+        </div>
+        <div class="modal-actions">
+            <button class="btn-secondary" onclick="closeAddDeviceModal()">Отмена</button>
+            <button class="btn-primary" onclick="confirmAddDevice()">Добавить</button>
+        </div>
+    </div>
+</div>
+
+<div class="toast-container" id="toasts"></div>
+{% endblock %}
+
+{% block extra_js %}
+<!-- Konva.js -->
+<script src="https://unpkg.com/konva@9/konva.min.js"></script>
+<script>
+// ---- Config ----
+const FLOOR_ID = {{ floor_id }};
+const API = '/api/';
+const ICON_SIZE = 48;
+const WAYPOINT_RADIUS = 6;
+
+let stage, layer, connectionsLayer, bgLayer;
+let devices = [];        // {id, konvaGroup, data}
+let connections = [];     // {id, konvaLine, data, waypointCircles}
+let deviceTypes = [];
+let builtinIcons = [];
+let selectedDevice = null;
+let connectionMode = false;
+let connectionStart = null;
+let iconImages = {};      // cache: url -> Image
+
+// ---- Helpers ----
+function toast(msg, type='') {
+    const c = document.getElementById('toasts');
+    const t = document.createElement('div');
+    t.className = 'toast ' + type;
+    t.textContent = msg;
+    c.appendChild(t);
+    setTimeout(() => t.remove(), 3500);
+}
+
+function csrfToken() {
+    return document.cookie.split(';').map(c=>c.trim()).find(c=>c.startsWith('csrftoken='))?.split('=')[1] || '';
+}
+
+let lastErrorTime = 0;
+async function apiFetch(url, options={}) {
+    const defaults = {
+        headers: {'Content-Type':'application/json', 'X-CSRFToken': csrfToken()},
+    };
+    try {
+        const r = await fetch(API + url, {...defaults, ...options});
+        if (!r.ok) {
+            const text = await r.text().catch(() => r.statusText);
+            throw new Error(text || r.statusText);
+        }
+        const contentType = r.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+            return await r.json();
+        }
+        return null;
+    } catch(e) {
+        // Не спамим тосты — максимум 1 раз в 3 секунды
+        const now = Date.now();
+        if (now - lastErrorTime > 3000) {
+            toast('Ошибка API: ' + e.message, 'error');
+            lastErrorTime = now;
+        }
+        return null;
+    }
+}
+
+// ---- Load icon image ----
+function loadIcon(url) {
+    return new Promise((resolve) => {
+        if (iconImages[url]) { resolve(iconImages[url]); return; }
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => { iconImages[url] = img; resolve(img); };
+        img.onerror = () => resolve(null);
+        img.src = url;
+    });
+}
+
+function getDeviceIconUrl(deviceData) {
+    const dt = deviceTypes.find(t => t.id === deviceData.device_type);
+    if (dt) {
+        if (dt.icon) return dt.icon;
+        if (dt.builtin_icon) {
+            const bi = builtinIcons.find(i => i.filename === dt.builtin_icon);
+            if (bi) return bi.url;
+        }
+    }
+    // Дефолтная иконка-заглушка
+    return null;
+}
+
+// ---- Init Konva ----
+function initStage() {
+    const container = document.getElementById('konvaContainer');
+    const area = document.getElementById('canvasArea');
+    const w = area.clientWidth;
+    const h = area.clientHeight - document.getElementById('toolbar').offsetHeight;
+
+    stage = new Konva.Stage({
+        container: 'konvaContainer',
+        width: w,
+        height: h,
+        draggable: false,
+    });
+
+    bgLayer = new Konva.Layer();
+    connectionsLayer = new Konva.Layer();
+    layer = new Konva.Layer();
+
+    stage.add(bgLayer);
+    stage.add(connectionsLayer);
+    stage.add(layer);
+
+    // Click on empty area -> deselect
+    stage.on('click tap', (e) => {
+        if (e.target === stage || e.target.getLayer() === bgLayer) {
+            deselectDevice();
+        }
+    });
+
+    window.addEventListener('resize', () => {
+        const w = area.clientWidth;
+        const h = area.clientHeight - document.getElementById('toolbar').offsetHeight;
+        stage.width(w);
+        stage.height(h);
+    });
+}
+
+// ---- Load floor data ----
+async function loadFloorData() {
+    const floor = await apiFetch('floors/' + FLOOR_ID + '/');
+    if (!floor) return;
+
+    document.getElementById('floorTitle').textContent = 'Этаж ' + floor.number;
+
+    // Breadcrumb
+    // Load office
+    if (floor.office) {
+        const office = await apiFetch('offices/' + floor.office + '/');
+        if (office) {
+            let bcHtml = `<a href="/">Россия</a> <span class="sep">›</span>`;
+            bcHtml += `<span>${office.name}</span> <span class="sep">›</span>`;
+            bcHtml += `<span>Этаж ${floor.number}</span>`;
+            document.getElementById('breadcrumb').innerHTML = bcHtml;
+        }
+    }
+
+    // Background image
+    if (floor.map_image) {
+        const bgImg = new Image();
+        bgImg.onload = () => {
+            const kImg = new Konva.Image({
+                image: bgImg,
+                x: 0, y: 0,
+                width: stage.width(),
+                height: stage.height(),
+            });
+            bgLayer.add(kImg);
+            bgLayer.draw();
+        };
+        bgImg.src = floor.map_image;
+    }
+}
+
+// ---- Load devices ----
+async function loadDevices() {
+    const data = await apiFetch('devices/?floor=' + FLOOR_ID);
+    if (!data) return;
+
+    for (const d of data) {
+        await addDeviceToCanvas(d);
+    }
+    layer.draw();
+}
+
+async function addDeviceToCanvas(deviceData) {
+    const group = new Konva.Group({
+        x: deviceData.x || 100,
+        y: deviceData.y || 100,
+        draggable: true,
+    });
+
+    // Icon
+    const iconUrl = getDeviceIconUrl(deviceData);
+    let iconNode;
+    if (iconUrl) {
+        const img = await loadIcon(iconUrl);
+        if (img) {
+            iconNode = new Konva.Image({
+                image: img,
+                width: ICON_SIZE,
+                height: ICON_SIZE,
+                offsetX: ICON_SIZE/2,
+                offsetY: ICON_SIZE/2,
+            });
+        }
+    }
+    if (!iconNode) {
+        // Default rect
+        iconNode = new Konva.Rect({
+            width: ICON_SIZE,
+            height: ICON_SIZE,
+            offsetX: ICON_SIZE/2,
+            offsetY: ICON_SIZE/2,
+            fill: '#7986cb',
+            cornerRadius: 8,
+        });
+    }
+    group.add(iconNode);
+
+    // Label
+    const label = new Konva.Text({
+        text: deviceData.name || 'Устройство',
+        fontSize: 11,
+        fill: '#333',
+        align: 'center',
+        y: ICON_SIZE/2 + 4,
+        offsetX: 0,
+    });
+    label.offsetX(label.width()/2);
+    group.add(label);
+
+    // Status dot
+    const statusDot = new Konva.Circle({
+        x: ICON_SIZE/2 - 4,
+        y: -ICON_SIZE/2 + 4,
+        radius: 5,
+        fill: '#bbb',
+        stroke: '#fff',
+        strokeWidth: 1.5,
+    });
+    group.add(statusDot);
+
+    layer.add(group);
+
+    const entry = { id: deviceData.id, konvaGroup: group, data: deviceData, label, statusDot };
+    devices.push(entry);
+
+    // Events
+    group.on('click tap', (e) => {
+        e.cancelBubble = true;
+        if (connectionMode) {
+            onConnectionClick(entry);
+        } else {
+            selectDevice(entry);
+        }
+    });
+
+    group.on('dragend', () => {
+        const pos = group.position();
+        // Save position
+        apiFetch('devices/' + deviceData.id + '/move/', {
+            method: 'PATCH',
+            body: JSON.stringify({x: pos.x, y: pos.y}),
+        });
+        deviceData.x = pos.x;
+        deviceData.y = pos.y;
+        updateConnectionLines();
+    });
+
+    group.on('dragmove', () => {
+        updateConnectionLines();
+    });
+
+    return entry;
+}
+
+// ---- Select device ----
+function selectDevice(entry) {
+    deselectDevice();
+    selectedDevice = entry;
+    entry.konvaGroup.children[0].stroke('#3f51b5');
+    entry.konvaGroup.children[0].strokeWidth(3);
+    layer.draw();
+
+    // Fill side panel
+    const d = entry.data;
+    document.getElementById('fDeviceType').value = d.device_type || '';
+    document.getElementById('fName').value = d.name || '';
+    document.getElementById('fModel').value = d.model || '';
+    document.getElementById('fIP').value = d.ip_address || '';
+    document.getElementById('fMAC').value = d.mac_address || '';
+    document.getElementById('fDesc').value = d.description || '';
+    document.getElementById('fPerson').value = d.responsible_person || '';
+    document.getElementById('fContact').value = d.contact_info || '';
+
+    document.getElementById('sidePanel').classList.add('open');
+}
+
+function deselectDevice() {
+    if (selectedDevice) {
+        selectedDevice.konvaGroup.children[0].stroke('');
+        selectedDevice.konvaGroup.children[0].strokeWidth(0);
+        layer.draw();
+    }
+    selectedDevice = null;
+    document.getElementById('sidePanel').classList.remove('open');
+}
+
+// ---- Auto-save device fields ----
+let saveTimeout = null;
+function setupAutoSave() {
+    const fields = ['fName','fModel','fIP','fMAC','fDesc','fPerson','fContact','fDeviceType'];
+    fields.forEach(id => {
+        document.getElementById(id).addEventListener('input', () => {
+            if (saveTimeout) clearTimeout(saveTimeout);
+            saveTimeout = setTimeout(() => saveDeviceFields(), 800);
+        });
+    });
+}
+
+async function saveDeviceFields() {
+    if (!selectedDevice) return;
+    const d = selectedDevice.data;
+    const body = {
+        name: document.getElementById('fName').value,
+        model: document.getElementById('fModel').value,
+        ip_address: document.getElementById('fIP').value || null,
+        mac_address: document.getElementById('fMAC').value,
+        description: document.getElementById('fDesc').value,
+        responsible_person: document.getElementById('fPerson').value,
+        contact_info: document.getElementById('fContact').value,
+        device_type: document.getElementById('fDeviceType').value || null,
+    };
+
+    const result = await apiFetch('devices/' + d.id + '/', {
+        method: 'PATCH',
+        body: JSON.stringify(body),
+    });
+    if (result) {
+        Object.assign(d, result);
+        selectedDevice.label.text(result.name || 'Устройство');
+        selectedDevice.label.offsetX(selectedDevice.label.width()/2);
+        layer.draw();
+        toast('Сохранено', 'success');
+    }
+}
+
+// ---- Connections ----
+async function loadConnections() {
+    const data = await apiFetch('connections/?floor=' + FLOOR_ID);
+    if (!data) return;
+    for (const c of data) {
+        addConnectionToCanvas(c);
+    }
+    connectionsLayer.draw();
+}
+
+function addConnectionToCanvas(connData) {
+    const devA = devices.find(d => d.id === connData.device_a);
+    const devB = devices.find(d => d.id === connData.device_b);
+    if (!devA || !devB) return;
+
+    const points = buildConnectionPoints(devA, devB, connData.waypoints || []);
+
+    const line = new Konva.Line({
+        points: points,
+        stroke: '#546e7a',
+        strokeWidth: 2,
+        lineCap: 'round',
+        lineJoin: 'round',
+    });
+
+    // Arrow head if type is arrow
+    if (connData.line_type === 'arrow') {
+        line.dash([]);
+        // Add arrowhead
+        const arrow = new Konva.Arrow({
+            points: points,
+            stroke: '#546e7a',
+            strokeWidth: 2,
+            fill: '#546e7a',
+            pointerLength: 10,
+            pointerWidth: 8,
+            lineCap: 'round',
+            lineJoin: 'round',
+        });
+        connectionsLayer.add(arrow);
+        const entry = { id: connData.id, konvaLine: arrow, data: connData, waypointCircles: [] };
+        connections.push(entry);
+        addWaypointHandles(entry, connData.waypoints || []);
+        return;
+    }
+
+    connectionsLayer.add(line);
+    const entry = { id: connData.id, konvaLine: line, data: connData, waypointCircles: [] };
+    connections.push(entry);
+    addWaypointHandles(entry, connData.waypoints || []);
+}
+
+function buildConnectionPoints(devA, devB, waypoints) {
+    const ax = devA.konvaGroup.x(), ay = devA.konvaGroup.y();
+    const bx = devB.konvaGroup.x(), by = devB.konvaGroup.y();
+    let pts = [ax, ay];
+    for (const wp of waypoints) {
+        pts.push(wp.x, wp.y);
+    }
+    pts.push(bx, by);
+    return pts;
+}
+
+// Global debounce timers for waypoint saves, keyed by connection id
+let wpSaveTimers = {};
+function saveWaypointsDebounced(connEntry) {
+    if (wpSaveTimers[connEntry.id]) clearTimeout(wpSaveTimers[connEntry.id]);
+    wpSaveTimers[connEntry.id] = setTimeout(() => {
+        apiFetch('connections/' + connEntry.id + '/waypoints/', {
+            method: 'PATCH',
+            body: JSON.stringify({waypoints: connEntry.data.waypoints || []}),
+        });
+        delete wpSaveTimers[connEntry.id];
+    }, 600);
+}
+
+let waypointActionInProgress = false;
+
+function addWaypointHandles(connEntry, waypoints) {
+    // Remove old
+    connEntry.waypointCircles.forEach(c => c.destroy());
+    connEntry.waypointCircles = [];
+
+    waypoints.forEach((wp, i) => {
+        const circle = new Konva.Circle({
+            x: wp.x,
+            y: wp.y,
+            radius: WAYPOINT_RADIUS,
+            fill: '#ff9800',
+            stroke: '#fff',
+            strokeWidth: 2,
+            draggable: true,
+        });
+
+        circle.on('dragmove', () => {
+            connEntry.data.waypoints[i] = {x: circle.x(), y: circle.y()};
+            updateSingleConnectionLine(connEntry);
+            connectionsLayer.batchDraw();
+        });
+
+        circle.on('dragend', () => {
+            saveWaypointsDebounced(connEntry);
+        });
+
+        // Double click on waypoint to delete it
+        circle.on('dblclick dbltap', (e) => {
+            e.cancelBubble = true;
+            if (waypointActionInProgress) return;
+            waypointActionInProgress = true;
+            connEntry.data.waypoints.splice(i, 1);
+            updateSingleConnectionLine(connEntry);
+            addWaypointHandles(connEntry, connEntry.data.waypoints);
+            connectionsLayer.batchDraw();
+            saveWaypointsDebounced(connEntry);
+            setTimeout(() => { waypointActionInProgress = false; }, 300);
+        });
+
+        connectionsLayer.add(circle);
+        connEntry.waypointCircles.push(circle);
+    });
+
+    // Double click on line to add waypoint
+    connEntry.konvaLine.off('dblclick dbltap');
+    connEntry.konvaLine.on('dblclick dbltap', (e) => {
+        e.cancelBubble = true;
+        if (waypointActionInProgress) return;
+        waypointActionInProgress = true;
+        const pos = stage.getPointerPosition();
+        if (!connEntry.data.waypoints) connEntry.data.waypoints = [];
+        connEntry.data.waypoints.push({x: pos.x, y: pos.y});
+        updateSingleConnectionLine(connEntry);
+        addWaypointHandles(connEntry, connEntry.data.waypoints);
+        connectionsLayer.batchDraw();
+        saveWaypointsDebounced(connEntry);
+        setTimeout(() => { waypointActionInProgress = false; }, 300);
+    });
+}
+
+function updateSingleConnectionLine(connEntry) {
+    const devA = devices.find(d => d.id === connEntry.data.device_a);
+    const devB = devices.find(d => d.id === connEntry.data.device_b);
+    if (!devA || !devB) return;
+    const pts = buildConnectionPoints(devA, devB, connEntry.data.waypoints || []);
+    connEntry.konvaLine.points(pts);
+}
+
+function updateConnectionLines() {
+    connections.forEach(c => {
+        updateSingleConnectionLine(c);
+    });
+    connectionsLayer.batchDraw();
+}
+
+// ---- Connection mode ----
+function toggleConnectionMode() {
+    connectionMode = !connectionMode;
+    connectionStart = null;
+    document.getElementById('btnAddConnection').classList.toggle('active', connectionMode);
+    document.getElementById('modeLabel').textContent = connectionMode ? 'Кликните на 1-е устройство, затем на 2-е' : '';
+}
+
+async function onConnectionClick(entry) {
+    if (!connectionStart) {
+        connectionStart = entry;
+        entry.konvaGroup.children[0].stroke('#ff9800');
+        entry.konvaGroup.children[0].strokeWidth(3);
+        layer.draw();
+        document.getElementById('modeLabel').textContent = 'Выбрано: ' + entry.data.name + '. Кликните на 2-е устройство.';
+    } else {
+        if (connectionStart.id === entry.id) {
+            toast('Нельзя связать устройство с самим собой');
+            return;
+        }
+        // Create connection
+        const body = {
+            device_a: connectionStart.id,
+            device_b: entry.id,
+            line_type: 'arrow',
+        };
+        const result = await apiFetch('connections/', {
+            method: 'POST',
+            body: JSON.stringify(body),
+        });
+        if (result) {
+            addConnectionToCanvas(result);
+            connectionsLayer.draw();
+            toast('Связь создана', 'success');
+        }
+
+        // Reset
+        connectionStart.konvaGroup.children[0].stroke('');
+        connectionStart.konvaGroup.children[0].strokeWidth(0);
+        layer.draw();
+        connectionStart = null;
+        document.getElementById('modeLabel').textContent = 'Кликните на 1-е устройство, затем на 2-е';
+    }
+}
+
+// ---- Add device ----
+function openAddDeviceModal() {
+    document.getElementById('addDeviceModal').style.display = 'flex';
+    document.getElementById('newDeviceName').value = '';
+}
+
+function closeAddDeviceModal() {
+    document.getElementById('addDeviceModal').style.display = 'none';
+}
+
+async function confirmAddDevice() {
+    const typeId = document.getElementById('newDeviceType').value;
+    const name = document.getElementById('newDeviceName').value || 'Новое устройство';
+    const body = {
+        floor: FLOOR_ID,
+        device_type: typeId || null,
+        name: name,
+        x: stage.width()/2,
+        y: stage.height()/2,
+    };
+    const result = await apiFetch('devices/', {
+        method: 'POST',
+        body: JSON.stringify(body),
+    });
+    if (result) {
+        await addDeviceToCanvas(result);
+        layer.draw();
+        toast('Устройство добавлено', 'success');
+    }
+    closeAddDeviceModal();
+}
+
+// ---- Delete selected ----
+async function deleteSelected() {
+    if (!selectedDevice) {
+        toast('Выберите устройство для удаления');
+        return;
+    }
+    if (!confirm('Удалить устройство «' + selectedDevice.data.name + '» и все его связи?')) return;
+
+    const id = selectedDevice.id;
+    await apiFetch('devices/' + id + '/', { method: 'DELETE' });
+
+    // Remove connections
+    connections = connections.filter(c => {
+        if (c.data.device_a === id || c.data.device_b === id) {
+            c.konvaLine.destroy();
+            c.waypointCircles.forEach(w => w.destroy());
+            return false;
+        }
+        return true;
+    });
+
+    selectedDevice.konvaGroup.destroy();
+    devices = devices.filter(d => d.id !== id);
+    deselectDevice();
+    layer.draw();
+    connectionsLayer.draw();
+    toast('Устройство удалено', 'success');
+}
+
+// ---- Upload floor map ----
+function setupMapUpload() {
+    document.getElementById('mapUpload').addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const formData = new FormData();
+        formData.append('map_image', file);
+
+        try {
+            const r = await fetch(API + 'floors/' + FLOOR_ID + '/upload-map/', {
+                method: 'POST',
+                headers: { 'X-CSRFToken': csrfToken() },
+                body: formData,
+            });
+            if (!r.ok) throw new Error(r.statusText);
+            const data = await r.json();
+
+            // Update background
+            const bgImg = new Image();
+            bgImg.onload = () => {
+                bgLayer.destroyChildren();
+                const kImg = new Konva.Image({
+                    image: bgImg,
+                    x: 0, y: 0,
+                    width: stage.width(),
+                    height: stage.height(),
+                });
+                bgLayer.add(kImg);
+                bgLayer.draw();
+            };
+            bgImg.src = data.map_image;
+            toast('Карта этажа загружена', 'success');
+        } catch(err) {
+            toast('Ошибка загрузки: ' + err.message, 'error');
+        }
+    });
+}
+
+// ---- Load device types into selects ----
+async function loadDeviceTypes() {
+    deviceTypes = await apiFetch('device-types/') || [];
+    builtinIcons = await apiFetch('builtin-icons/') || [];
+
+    const selects = [document.getElementById('fDeviceType'), document.getElementById('newDeviceType')];
+    selects.forEach(sel => {
+        sel.innerHTML = '<option value="">— не выбран —</option>';
+        deviceTypes.forEach(dt => {
+            const opt = document.createElement('option');
+            opt.value = dt.id;
+            opt.textContent = dt.name;
+            sel.appendChild(opt);
+        });
+    });
+}
+
+// ---- Toolbar events ----
+document.getElementById('btnAddDevice').addEventListener('click', openAddDeviceModal);
+document.getElementById('btnAddConnection').addEventListener('click', toggleConnectionMode);
+document.getElementById('btnDelete').addEventListener('click', deleteSelected);
+
+// ---- INIT ----
+(async function init() {
+    initStage();
+    await loadDeviceTypes();
+    await loadFloorData();
+    await loadDevices();
+    await loadConnections();
+    setupAutoSave();
+    setupMapUpload();
+})();
+</script>
+{% endblock %}

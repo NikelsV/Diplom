@@ -1,0 +1,230 @@
+{% extends "mappy/base.html" %}
+{% load static %}
+
+{% block title %}WebMap — Устройства{% endblock %}
+
+{% block content %}
+<div class="map-container">
+    <div class="map-header">
+        <h1>Устройства</h1>
+    </div>
+
+    <div class="filter-bar">
+        <input type="text" id="searchInput" placeholder="Поиск по имени, IP, MAC...">
+        <select id="filterOffice">
+            <option value="">Все офисы</option>
+        </select>
+        <select id="filterType">
+            <option value="">Все типы</option>
+        </select>
+    </div>
+
+    <div class="device-grid" id="deviceGrid">
+        <!-- Cards rendered here -->
+    </div>
+</div>
+
+<!-- Edit modal -->
+<div id="editModal" class="modal-overlay" style="display:none;">
+    <div class="modal-box">
+        <h2 id="editTitle">Редактировать устройство</h2>
+        <div class="field-group"><label>Тип устройства</label><select id="eType"></select></div>
+        <div class="field-group"><label>Название</label><input id="eName" type="text"></div>
+        <div class="field-group"><label>Модель</label><input id="eModel" type="text"></div>
+        <div class="field-group"><label>IP адрес</label><input id="eIP" type="text"></div>
+        <div class="field-group"><label>MAC адрес</label><input id="eMAC" type="text"></div>
+        <div class="field-group"><label>Описание</label><textarea id="eDesc"></textarea></div>
+        <div class="field-group"><label>Ответственное лицо</label><input id="ePerson" type="text"></div>
+        <div class="field-group"><label>Контактные данные</label><input id="eContact" type="text"></div>
+        <input type="hidden" id="eId">
+        <div class="modal-actions">
+            <button class="btn-secondary" onclick="closeEditModal()">Отмена</button>
+            <button class="btn-primary" onclick="saveEdit()">Сохранить</button>
+        </div>
+    </div>
+</div>
+
+<div class="toast-container" id="toasts"></div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const API = '/api/';
+let allDevices = [];
+let deviceTypes = [];
+let offices = [];
+
+function toast(msg, type='') {
+    const c = document.getElementById('toasts');
+    const t = document.createElement('div');
+    t.className = 'toast ' + type;
+    t.textContent = msg;
+    c.appendChild(t);
+    setTimeout(() => t.remove(), 3500);
+}
+
+function csrfToken() {
+    return document.cookie.split(';').map(c=>c.trim()).find(c=>c.startsWith('csrftoken='))?.split('=')[1] || '';
+}
+
+async function apiFetch(url, options={}) {
+    const defaults = {
+        headers: {'Content-Type':'application/json', 'X-CSRFToken': csrfToken()},
+    };
+    const r = await fetch(API + url, {...defaults, ...options});
+    if (options.method === 'DELETE') return null;
+    return await r.json();
+}
+
+async function loadAll() {
+    deviceTypes = await apiFetch('device-types/') || [];
+    offices = await apiFetch('offices/') || [];
+    allDevices = await apiFetch('devices/') || [];
+
+    // Populate filter selects
+    const selType = document.getElementById('filterType');
+    deviceTypes.forEach(t => {
+        const o = document.createElement('option');
+        o.value = t.id; o.textContent = t.name;
+        selType.appendChild(o);
+    });
+    const selOffice = document.getElementById('filterOffice');
+    offices.forEach(o => {
+        const opt = document.createElement('option');
+        opt.value = o.id; opt.textContent = o.name;
+        selOffice.appendChild(opt);
+    });
+
+    // Edit modal type select
+    const eType = document.getElementById('eType');
+    eType.innerHTML = '<option value="">— не выбран —</option>';
+    deviceTypes.forEach(t => {
+        const o = document.createElement('option');
+        o.value = t.id; o.textContent = t.name;
+        eType.appendChild(o);
+    });
+
+    renderDevices(allDevices);
+}
+
+function renderDevices(devs) {
+    const grid = document.getElementById('deviceGrid');
+    grid.innerHTML = '';
+
+    if (devs.length === 0) {
+        grid.innerHTML = '<p style="color:#999;padding:20px;">Нет устройств</p>';
+        return;
+    }
+
+    devs.forEach(d => {
+        const typeName = deviceTypes.find(t => t.id === d.device_type)?.name || '—';
+        const card = document.createElement('div');
+        card.className = 'device-card';
+        card.innerHTML = `
+            <div class="icon-wrap">
+                <span style="font-size:24px;">🖥</span>
+            </div>
+            <div class="info">
+                <h4>${esc(d.name)}</h4>
+                <p><b>Тип:</b> ${esc(typeName)}</p>
+                <p><b>Модель:</b> ${esc(d.model || '—')}</p>
+                <p><b>IP:</b> ${esc(d.ip_address || '—')} &nbsp; <b>MAC:</b> ${esc(d.mac_address || '—')}</p>
+                <p><b>Ответственный:</b> ${esc(d.responsible_person || '—')}</p>
+                <p><b>Контакты:</b> ${esc(d.contact_info || '—')}</p>
+                ${d.description ? '<p style="color:#555;font-style:italic;margin-top:4px;">' + esc(d.description) + '</p>' : ''}
+                <div class="actions">
+                    <button onclick="openEdit(${d.id})">✏️ Редактировать</button>
+                    <button class="delete" onclick="deleteDevice(${d.id}, '${esc(d.name)}')">🗑 Удалить</button>
+                </div>
+            </div>
+        `;
+        grid.appendChild(card);
+    });
+}
+
+function esc(s) {
+    const d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+}
+
+// Filter
+function applyFilters() {
+    const q = document.getElementById('searchInput').value.toLowerCase();
+    const officeId = document.getElementById('filterOffice').value;
+    const typeId = document.getElementById('filterType').value;
+
+    let filtered = allDevices;
+    if (q) {
+        filtered = filtered.filter(d =>
+            (d.name || '').toLowerCase().includes(q) ||
+            (d.ip_address || '').includes(q) ||
+            (d.mac_address || '').toLowerCase().includes(q)
+        );
+    }
+    if (typeId) filtered = filtered.filter(d => d.device_type == typeId);
+    // Office filter needs floors lookup — simplify for now
+    renderDevices(filtered);
+}
+
+document.getElementById('searchInput').addEventListener('input', applyFilters);
+document.getElementById('filterOffice').addEventListener('change', applyFilters);
+document.getElementById('filterType').addEventListener('change', applyFilters);
+
+// Edit modal
+function openEdit(id) {
+    const d = allDevices.find(x => x.id === id);
+    if (!d) return;
+    document.getElementById('eId').value = d.id;
+    document.getElementById('eName').value = d.name || '';
+    document.getElementById('eModel').value = d.model || '';
+    document.getElementById('eIP').value = d.ip_address || '';
+    document.getElementById('eMAC').value = d.mac_address || '';
+    document.getElementById('eDesc').value = d.description || '';
+    document.getElementById('ePerson').value = d.responsible_person || '';
+    document.getElementById('eContact').value = d.contact_info || '';
+    document.getElementById('eType').value = d.device_type || '';
+    document.getElementById('editTitle').textContent = 'Редактировать: ' + d.name;
+    document.getElementById('editModal').style.display = 'flex';
+}
+
+function closeEditModal() {
+    document.getElementById('editModal').style.display = 'none';
+}
+
+async function saveEdit() {
+    const id = document.getElementById('eId').value;
+    const body = {
+        name: document.getElementById('eName').value,
+        model: document.getElementById('eModel').value,
+        ip_address: document.getElementById('eIP').value || null,
+        mac_address: document.getElementById('eMAC').value,
+        description: document.getElementById('eDesc').value,
+        responsible_person: document.getElementById('ePerson').value,
+        contact_info: document.getElementById('eContact').value,
+        device_type: document.getElementById('eType').value || null,
+    };
+    const result = await apiFetch('devices/' + id + '/', {
+        method: 'PATCH',
+        body: JSON.stringify(body),
+    });
+    if (result) {
+        const idx = allDevices.findIndex(d => d.id == id);
+        if (idx >= 0) allDevices[idx] = result;
+        applyFilters();
+        closeEditModal();
+        toast('Устройство обновлено', 'success');
+    }
+}
+
+async function deleteDevice(id, name) {
+    if (!confirm('Удалить устройство «' + name + '»? Все связи будут удалены.')) return;
+    await apiFetch('devices/' + id + '/', { method: 'DELETE' });
+    allDevices = allDevices.filter(d => d.id !== id);
+    applyFilters();
+    toast('Устройство удалено', 'success');
+}
+
+loadAll();
+</script>
+{% endblock %}
