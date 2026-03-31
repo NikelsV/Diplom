@@ -3,25 +3,93 @@
 
 {% block title %}WebMap — Карта России{% endblock %}
 
+{% block extra_css %}
+<style>
+    .russia-map-wrap {
+        position: relative;
+        width: 100%;
+        overflow: hidden;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        cursor: grab;
+        background: #eef1f7;
+    }
+    .russia-map-wrap.grabbing { cursor: grabbing; }
+    .russia-map-wrap svg { display: block; transform-origin: 0 0; }
+    .region-info-box {
+        position: absolute;
+        top: 10px; left: 10px;
+        background: rgba(26, 35, 126, 0.92);
+        color: #fff;
+        padding: 8px 14px;
+        border-radius: 6px;
+        font-size: 0.85rem;
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity 0.15s;
+        z-index: 20;
+        max-width: 350px;
+        line-height: 1.4;
+    }
+    .region-info-box.visible { opacity: 1; }
+    .region-info-box .info-name { font-weight: 600; font-size: 0.95rem; }
+    .region-info-box .info-id { opacity: 0.7; font-size: 0.78rem; margin-top: 2px; }
+    .zoom-controls {
+        position: absolute;
+        top: 10px; right: 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        z-index: 15;
+    }
+    .zoom-controls button {
+        width: 34px; height: 34px;
+        border: 1px solid #c5cae9;
+        border-radius: 6px;
+        background: #fff;
+        font-size: 1.2rem;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: background 0.15s;
+    }
+    .zoom-controls button:hover { background: #e8eaf6; }
+    .map-note { margin-top: 8px; font-size: 0.8rem; color: #888; }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="map-container">
     <div class="map-header">
         <h1>Интерактивная карта сети</h1>
-        <div class="breadcrumb" id="breadcrumb">
-            <span>Россия</span>
-        </div>
+        <div class="breadcrumb" id="breadcrumb"><span>Россия</span></div>
     </div>
     <div class="russia-map-wrap" id="mapWrap">
-        <!-- SVG будет загружена сюда -->
+        <div class="region-info-box" id="regionInfo">
+            <div class="info-name" id="infoName"></div>
+            <div class="info-id" id="infoId"></div>
+        </div>
+        <div class="zoom-controls">
+            <button onclick="zoomIn()" title="Приблизить">+</button>
+            <button onclick="zoomOut()" title="Отдалить">−</button>
+            <button onclick="zoomReset()" title="Сброс">⌂</button>
+        </div>
     </div>
-    <!-- Контейнер для городских точек поверх SVG -->
+
     <div id="cityDots"></div>
-    <!-- Панель со списком (офисы / этажи) -->
+
     <div id="popupPanel" class="popup-panel" style="display:none;">
         <button class="popup-close" onclick="closePopup()">&times;</button>
         <h3 id="popupTitle"></h3>
         <ul id="popupList"></ul>
     </div>
+
+    <p class="map-note">
+        Колесо мыши — приближение. Зажмите и тяните — перемещение.
+        Кликните на область для выбора региона.
+        Объединение: <code>python manage.py merge_regions r5 r12 r47 --name "Название"</code>
+    </p>
 </div>
 
 <div class="toast-container" id="toasts"></div>
@@ -31,7 +99,6 @@
 <script>
 const API = '/api/';
 
-// ---- Helpers ----
 function toast(msg, type='') {
     const c = document.getElementById('toasts');
     const t = document.createElement('div');
@@ -52,196 +119,306 @@ async function apiFetch(url) {
     }
 }
 
-// ---- State ----
 let selectedRegion = null;
 let selectedCity = null;
+let allRegionsFromDB = null;
 
-// ---- Load SVG map ----
-async function loadMap() {
-    const resp = await fetch('{% static "mappy/svg/russia_map.svg" %}');
-    const svg = await resp.text();
-    document.getElementById('mapWrap').innerHTML = svg;
-    initMapInteraction();
+async function getRegionsFromDB() {
+    if (allRegionsFromDB) return allRegionsFromDB;
+    allRegionsFromDB = await apiFetch('regions/') || [];
+    return allRegionsFromDB;
 }
 
+// ---- Load SVG ----
+async function loadMap() {
+    const resp = await fetch('{% static "mappy/svg/russia_map.svg" %}');
+    const svgText = await resp.text();
+    const wrap = document.getElementById('mapWrap');
+
+    // Сохраняем дочерние элементы (info box, zoom controls)
+    const savedChildren = Array.from(wrap.children);
+
+    // Вставляем SVG — innerHTML на элементе в DOM корректно парсит SVG namespace
+    wrap.innerHTML = svgText;
+
+    // Возвращаем info box и zoom controls поверх SVG
+    savedChildren.forEach(child => wrap.appendChild(child));
+
+    initMapInteraction();
+    initZoomPan();
+    await getRegionsFromDB();
+}
+
+function getSvg() { return document.getElementById('russia-map'); }
+
+// ---- Interaction ----
 function initMapInteraction() {
-    const paths = document.querySelectorAll('#russia-map path.region');
-    paths.forEach(p => {
-        p.addEventListener('click', () => onRegionClick(p));
+    document.querySelectorAll('#russia-map .region').forEach(pathEl => {
+        pathEl.addEventListener('click', (e) => {
+            e.stopPropagation();
+            onRegionClick(pathEl);
+        });
+        pathEl.addEventListener('mouseenter', () => onRegionHover(pathEl));
+        pathEl.addEventListener('mouseleave', () => onRegionLeave());
     });
 }
 
-// ---- Region click ----
+// ---- Hover ----
+function onRegionHover(pathEl) {
+    const groupId = pathEl.getAttribute('data-group');
+    const regionId = groupId || pathEl.getAttribute('data-fill');
+
+    const infoBox = document.getElementById('regionInfo');
+    const infoName = document.getElementById('infoName');
+    const infoId = document.getElementById('infoId');
+
+    // Всегда показываем id сразу
+    infoId.textContent = 'id: ' + pathEl.getAttribute('data-fill') + (groupId ? '  (группа: ' + groupId + ')' : '');
+
+    // Имя из кэша (синхронно) или «загрузка»
+    if (allRegionsFromDB) {
+        const region = allRegionsFromDB.find(r => r.svg_id === regionId);
+        infoName.textContent = region ? region.name : '(не добавлен в БД)';
+    } else {
+        infoName.textContent = '...';
+        // Подгрузим асинхронно и обновим
+        getRegionsFromDB().then(regions => {
+            const region = regions.find(r => r.svg_id === regionId);
+            infoName.textContent = region ? region.name : '(не добавлен в БД)';
+        });
+    }
+
+    infoBox.classList.add('visible');
+}
+
+function onRegionLeave() {
+    document.getElementById('regionInfo').classList.remove('visible');
+}
+
+// ---- Click ----
 async function onRegionClick(pathEl) {
-    // Снимаем выделение со старых
-    document.querySelectorAll('#russia-map path.region.active').forEach(p => p.classList.remove('active'));
-    pathEl.classList.add('active');
+    // Remove old highlights
+    document.querySelectorAll('#russia-map .region.active').forEach(p => p.classList.remove('active'));
 
-    const regionSvgId = pathEl.getAttribute('data-region-id');
-    const regionName = pathEl.querySelector('title')?.textContent || regionSvgId;
+    // Если path в группе — подсветить все path'ы группы, иначе только этот
+    const groupId = pathEl.getAttribute('data-group');
+    if (groupId) {
+        document.querySelectorAll('#russia-map .region[data-group="' + groupId + '"]').forEach(p => {
+            p.classList.add('active');
+        });
+    } else {
+        pathEl.classList.add('active');
+    }
 
-    // Ищем регион в БД по svg_id
-    const regions = await apiFetch('regions/');
-    if (!regions) return;
-    const region = regions.find(r => r.svg_id === regionSvgId);
+    const regionId = groupId || pathEl.getAttribute('data-fill');
+    if (!regionId) return;
+
+    const regions = await getRegionsFromDB();
+    const region = regions.find(r => r.svg_id === regionId);
     if (!region) {
-        toast('Регион «' + regionName + '» не найден в БД. Добавьте его через админку.', 'error');
+        toast('Регион не найден в БД. svg_id = "' + regionId + '"', 'error');
         clearCityDots();
         return;
     }
 
     selectedRegion = region;
     selectedCity = null;
-    updateBreadcrumb([regionName]);
+    updateBreadcrumb([region.name]);
 
-    // Загружаем города этого региона
     const cities = await apiFetch('cities/?region=' + region.id);
     if (!cities || cities.length === 0) {
-        toast('Нет городов в регионе «' + regionName + '»');
+        toast('Нет городов в регионе «' + region.name + '»');
         clearCityDots();
         return;
     }
-
     showCityDots(cities);
 }
 
-// ---- Show city dots ----
-function clearCityDots() {
-    document.getElementById('cityDots').innerHTML = '';
+// ---- Zoom & Pan ----
+let scale = 1, panX = 0, panY = 0;
+let isPanning = false, panStartX = 0, panStartY = 0;
+const MIN_SCALE = 0.5, MAX_SCALE = 8;
+
+function initZoomPan() {
+    const wrap = document.getElementById('mapWrap');
+    wrap.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        const rect = wrap.getBoundingClientRect();
+        const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+        const oldScale = scale;
+        scale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, scale * (e.deltaY > 0 ? 0.9 : 1.1)));
+        panX = mx - (mx - panX) * (scale / oldScale);
+        panY = my - (my - panY) * (scale / oldScale);
+        applyTransform();
+    }, { passive: false });
+
+    wrap.addEventListener('mousedown', (e) => {
+        if (e.target.closest('.zoom-controls')) return;
+        isPanning = true;
+        panStartX = e.clientX - panX;
+        panStartY = e.clientY - panY;
+        wrap.classList.add('grabbing');
+    });
+    window.addEventListener('mousemove', (e) => {
+        if (!isPanning) return;
+        panX = e.clientX - panStartX;
+        panY = e.clientY - panStartY;
+        applyTransform();
+    });
+    window.addEventListener('mouseup', () => {
+        isPanning = false;
+        document.getElementById('mapWrap').classList.remove('grabbing');
+    });
+
+    let lastTouchDist = 0;
+    wrap.addEventListener('touchstart', (e) => {
+        if (e.touches.length === 1) {
+            isPanning = true;
+            panStartX = e.touches[0].clientX - panX;
+            panStartY = e.touches[0].clientY - panY;
+        } else if (e.touches.length === 2) {
+            lastTouchDist = Math.hypot(
+                e.touches[0].clientX - e.touches[1].clientX,
+                e.touches[0].clientY - e.touches[1].clientY);
+        }
+    }, { passive: false });
+    wrap.addEventListener('touchmove', (e) => {
+        e.preventDefault();
+        if (e.touches.length === 1 && isPanning) {
+            panX = e.touches[0].clientX - panStartX;
+            panY = e.touches[0].clientY - panStartY;
+            applyTransform();
+        } else if (e.touches.length === 2) {
+            const dist = Math.hypot(
+                e.touches[0].clientX - e.touches[1].clientX,
+                e.touches[0].clientY - e.touches[1].clientY);
+            if (lastTouchDist > 0) {
+                scale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, scale * (dist / lastTouchDist)));
+                applyTransform();
+            }
+            lastTouchDist = dist;
+        }
+    }, { passive: false });
+    wrap.addEventListener('touchend', () => { isPanning = false; lastTouchDist = 0; });
 }
+
+function applyTransform() {
+    const svgEl = getSvg();
+    if (svgEl) svgEl.style.transform = `translate(${panX}px, ${panY}px) scale(${scale})`;
+    if (selectedRegion) {
+        apiFetch('cities/?region=' + selectedRegion.id).then(cities => {
+            if (cities && cities.length) showCityDots(cities);
+        });
+    }
+}
+
+function zoomIn() {
+    const wrap = document.getElementById('mapWrap');
+    const rect = wrap.getBoundingClientRect();
+    const cx = rect.width/2, cy = rect.height/2;
+    const old = scale;
+    scale = Math.min(MAX_SCALE, scale * 1.3);
+    panX = cx - (cx - panX) * (scale / old);
+    panY = cy - (cy - panY) * (scale / old);
+    applyTransform();
+}
+function zoomOut() {
+    const wrap = document.getElementById('mapWrap');
+    const rect = wrap.getBoundingClientRect();
+    const cx = rect.width/2, cy = rect.height/2;
+    const old = scale;
+    scale = Math.max(MIN_SCALE, scale / 1.3);
+    panX = cx - (cx - panX) * (scale / old);
+    panY = cy - (cy - panY) * (scale / old);
+    applyTransform();
+}
+function zoomReset() { scale = 1; panX = 0; panY = 0; applyTransform(); }
+
+// ---- City dots ----
+function clearCityDots() { document.getElementById('cityDots').innerHTML = ''; }
 
 function showCityDots(cities) {
     clearCityDots();
     closePopup();
     const container = document.getElementById('cityDots');
     const mapWrap = document.getElementById('mapWrap');
-    const svgEl = mapWrap.querySelector('svg');
+    const svgEl = getSvg();
     if (!svgEl) return;
-
-    const rect = svgEl.getBoundingClientRect();
+    const svgRect = svgEl.getBoundingClientRect();
     const wrapRect = mapWrap.getBoundingClientRect();
     const vb = svgEl.viewBox.baseVal;
 
     cities.forEach(city => {
-        // Перевод координат SVG viewBox -> пиксели экрана
-        const px = ((city.x - vb.x) / vb.width) * rect.width + (rect.left - wrapRect.left);
-        const py = ((city.y - vb.y) / vb.height) * rect.height + (rect.top - wrapRect.top);
-
+        const px = ((city.x - vb.x) / vb.width) * svgRect.width + (svgRect.left - wrapRect.left);
+        const py = ((city.y - vb.y) / vb.height) * svgRect.height + (svgRect.top - wrapRect.top);
         const dot = document.createElement('div');
         dot.className = 'city-dot';
         dot.style.left = px + 'px';
         dot.style.top = py + 'px';
         dot.innerHTML = `<span class="city-label">${city.name}</span>`;
-        dot.addEventListener('click', (e) => {
-            e.stopPropagation();
-            onCityClick(city, dot);
-        });
+        dot.addEventListener('click', (e) => { e.stopPropagation(); onCityClick(city, dot); });
         container.appendChild(dot);
     });
 }
 
-// ---- City click -> show offices ----
+// ---- City → Office → Floor ----
 async function onCityClick(city, dotEl) {
     selectedCity = city;
     updateBreadcrumb([selectedRegion.name, city.name]);
-
     const offices = await apiFetch('offices/?city=' + city.id);
-    if (!offices || offices.length === 0) {
-        toast('Нет офисов в городе «' + city.name + '»');
-        return;
-    }
-
-    showPopup(
-        'Офисы — ' + city.name,
-        offices,
-        dotEl,
-        (office) => onOfficeClick(office, city)
-    );
+    if (!offices || offices.length === 0) { toast('Нет офисов в городе «' + city.name + '»'); return; }
+    showPopup('Офисы — ' + city.name, offices, dotEl, (office) => onOfficeClick(office, city));
 }
 
-// ---- Office click -> show floors ----
 async function onOfficeClick(office, city) {
     updateBreadcrumb([selectedRegion.name, city.name, office.name]);
-
     const floors = await apiFetch('floors/?office=' + office.id);
-    if (!floors || floors.length === 0) {
-        toast('Нет этажей в офисе «' + office.name + '»');
-        return;
-    }
-
-    const popupTitle = document.getElementById('popupTitle');
-    const popupList = document.getElementById('popupList');
-    popupTitle.textContent = 'Этажи — ' + office.name;
-    popupList.innerHTML = '';
+    if (!floors || floors.length === 0) { toast('Нет этажей в офисе «' + office.name + '»'); return; }
+    document.getElementById('popupTitle').textContent = 'Этажи — ' + office.name;
+    const list = document.getElementById('popupList');
+    list.innerHTML = '';
     floors.forEach(floor => {
         const li = document.createElement('li');
         li.textContent = 'Этаж ' + floor.number;
-        li.addEventListener('click', () => {
-            window.location.href = '/floor/' + floor.id + '/';
-        });
-        popupList.appendChild(li);
+        li.addEventListener('click', () => { window.location.href = '/floor/' + floor.id + '/'; });
+        list.appendChild(li);
     });
 }
 
-// ---- Popup panel ----
 function showPopup(title, items, anchorEl, onClickItem) {
     const panel = document.getElementById('popupPanel');
-    const popupTitle = document.getElementById('popupTitle');
-    const popupList = document.getElementById('popupList');
-
-    popupTitle.textContent = title;
-    popupList.innerHTML = '';
-
+    document.getElementById('popupTitle').textContent = title;
+    const list = document.getElementById('popupList');
+    list.innerHTML = '';
     items.forEach(item => {
         const li = document.createElement('li');
         li.textContent = item.name + (item.address ? ' — ' + item.address : '');
         li.addEventListener('click', () => onClickItem(item));
-        popupList.appendChild(li);
+        list.appendChild(li);
     });
-
-    // Position near anchor
-    const mapWrap = document.getElementById('mapWrap');
-    const wrapRect = mapWrap.getBoundingClientRect();
-    const anchorRect = anchorEl.getBoundingClientRect();
-
-    panel.style.left = (anchorRect.left - wrapRect.left + 20) + 'px';
-    panel.style.top = (anchorRect.top - wrapRect.top + 20) + 'px';
+    const wr = document.getElementById('mapWrap').getBoundingClientRect();
+    const ar = anchorEl.getBoundingClientRect();
+    panel.style.left = (ar.left - wr.left + 20) + 'px';
+    panel.style.top = (ar.top - wr.top + 20) + 'px';
     panel.style.display = 'block';
 }
 
-function closePopup() {
-    document.getElementById('popupPanel').style.display = 'none';
-}
+function closePopup() { document.getElementById('popupPanel').style.display = 'none'; }
 
-// ---- Breadcrumb ----
 function updateBreadcrumb(parts) {
     const bc = document.getElementById('breadcrumb');
     let html = '<a onclick="resetMap()">Россия</a>';
-    parts.forEach((p, i) => {
-        html += ' <span class="sep">›</span> <span>' + p + '</span>';
-    });
+    parts.forEach(p => { html += ' <span class="sep">›</span> <span>' + p + '</span>'; });
     bc.innerHTML = html;
 }
 
 function resetMap() {
-    selectedRegion = null;
-    selectedCity = null;
-    clearCityDots();
-    closePopup();
-    document.querySelectorAll('#russia-map path.region.active').forEach(p => p.classList.remove('active'));
+    selectedRegion = null; selectedCity = null;
+    clearCityDots(); closePopup();
+    document.querySelectorAll('#russia-map .region.active').forEach(p => p.classList.remove('active'));
     document.getElementById('breadcrumb').innerHTML = '<span>Россия</span>';
 }
 
-// ---- Recalculate city positions on window resize ----
-window.addEventListener('resize', () => {
-    if (selectedRegion) {
-        apiFetch('cities/?region=' + selectedRegion.id).then(cities => {
-            if (cities && cities.length) showCityDots(cities);
-        });
-    }
-});
-
-// ---- Init ----
 loadMap();
 </script>
 {% endblock %}
