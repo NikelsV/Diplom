@@ -1,0 +1,18 @@
+<div id="editModal" class="modal-overlay" style="display:none;">
+    <div class="modal-box">
+        <h2 id="editTitle">Редактировать устройство</h2>
+        <div class="field-group"><label>Тип устройства</label><select id="eType"></select></div>
+        <div class="field-group"><label>Название</label><input id="eName" type="text"></div>
+        <div class="field-group"><label>Модель</label><input id="eModel" type="text"></div>
+        <div class="field-group"><label>IP адрес</label><input id="eIP" type="text"></div>
+        <div class="field-group"><label>MAC адрес</label><input id="eMAC" type="text"></div>
+        <div class="field-group"><label>Описание</label><textarea id="eDesc"></textarea></div>
+        <div class="field-group"><label>Ответственное лицо</label><input id="ePerson" type="text"></div>
+        <div class="field-group"><label>Контактные данные</label><input id="eContact" type="text"></div>
+        <input type="hidden" id="eId">
+        <div class="modal-actions">
+            <button class="btn-secondary" onclick="closeEditModal()">Отмена</button>
+            <button class="btn-primary" onclick="saveEdit()">Сохранить</button>
+        </div>
+    </div>
+</div>

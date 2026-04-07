@@ -1,0 +1,146 @@
+    .russia-map-wrap {
+        position: relative; width: 100%; overflow: hidden;
+        border: 1px solid #ddd; border-radius: 8px; cursor: grab; background: #eef1f7;
+    }
+    .russia-map-wrap.grabbing { cursor: grabbing; }
+    .russia-map-wrap.placing-city { cursor: crosshair !important; }
+    .russia-map-wrap svg { display: block; transform-origin: 0 0; }
+    #cityDots {
+        position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+        transform-origin: 0 0; pointer-events: none; z-index: 5;
+    }
+    #cityDots .city-dot { pointer-events: all; }
+    .region-info-box {
+        position: absolute; top: 10px; left: 10px;
+        background: rgba(26,35,126,0.92); color: #fff; padding: 8px 14px;
+        border-radius: 6px; font-size: 0.85rem; pointer-events: none;
+        opacity: 0; transition: opacity 0.15s; z-index: 20; max-width: 350px; line-height: 1.4;
+    }
+    .region-info-box.visible { opacity: 1; }
+    .region-info-box .info-name { font-weight: 600; font-size: 0.95rem; }
+    .region-info-box .info-id { opacity: 0.7; font-size: 0.78rem; margin-top: 2px; }
+    .zoom-controls {
+        position: absolute; top: 10px; right: 10px;
+        display: flex; flex-direction: column; gap: 4px; z-index: 15;
+    }
+    .zoom-controls button {
+        width: 34px; height: 34px; border: 1px solid #c5cae9; border-radius: 6px;
+        background: #fff; font-size: 1.2rem; cursor: pointer;
+        display: flex; align-items: center; justify-content: center; transition: background 0.15s;
+    }
+    .zoom-controls button:hover { background: #e8eaf6; }
+    .map-toolbar {
+        display: flex; gap: 8px; padding: 8px 0; flex-wrap: wrap; align-items: center;
+    }
+    .map-toolbar button {
+        padding: 6px 14px; border: 1px solid #c5cae9; border-radius: 6px;
+        background: #fff; cursor: pointer; font-size: .85rem; transition: all .15s;
+    }
+    .map-toolbar button:hover { background: #e8eaf6; }
+    .map-toolbar button.active { background: #3f51b5; color: #fff; border-color: #3f51b5; }
+    .map-toolbar span.hint { font-size: .8rem; color: #888; margin-left: auto; }
+    .popup-add-btn {
+        display: block; width: 100%; margin-top: 8px; padding: 8px;
+        border: 1px dashed #3f51b5; border-radius: 6px; background: #e8eaf6;
+        color: #3f51b5; cursor: pointer; font-size: .85rem; text-align: center; transition: background .15s;
+    }
+    .popup-add-btn:hover { background: #c5cae9; }
+    .popup-del-btn {
+        display: block; width: 100%; margin-top: 4px; padding: 8px;
+        border: 1px dashed #e53935; border-radius: 6px; background: #ffebee;
+        color: #e53935; cursor: pointer; font-size: .85rem; text-align: center; transition: background .15s;
+    }
+    .popup-del-btn:hover { background: #ffcdd2; }
+    .map-note { margin-top: 8px; font-size: 0.8rem; color: #888; }
+
+/* === From main.css (map page) === */
+/* === MAP PAGE === */
+.map-container {
+    position: relative;
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 2px 12px rgba(0,0,0,.08);
+    padding: 24px;
+    overflow: visible;
+}
+.map-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+}
+.map-header h1 { font-size: 1.5rem; color: #1a237e; }
+
+.breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: .9rem;
+    color: #666;
+    flex-wrap: wrap;
+}
+.breadcrumb a {
+    color: #1a237e;
+    text-decoration: none;
+    cursor: pointer;
+}
+.breadcrumb a:hover { text-decoration: underline; }
+.breadcrumb .sep { color: #aaa; }
+
+/* SVG Map */
+.russia-map-wrap {
+    width: 100%;
+    overflow: auto;
+}
+.russia-map-wrap svg {
+    width: 100%;
+    height: auto;
+    max-height: 70vh;
+}
+.russia-map-wrap svg path.region {
+    fill: #c5cae9;
+    stroke: #fff;
+    stroke-width: 1.5;
+    cursor: pointer;
+    transition: fill .2s, transform .1s;
+}
+.russia-map-wrap svg path.region:hover {
+    fill: #7986cb;
+}
+.russia-map-wrap svg path.region.active {
+    fill: #3f51b5;
+}
+
+/* City dots on map */
+.city-dot {
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    background: #e53935;
+    border: 2px solid #fff;
+    border-radius: 50%;
+    cursor: pointer;
+    transform: translate(-50%, -50%);
+    transition: transform .15s, background .2s;
+    z-index: 10;
+}
+.city-dot:hover {
+    transform: translate(-50%, -50%) scale(1.4);
+    background: #ff5252;
+}
+.city-dot .city-label {
+    position: absolute;
+    top: -22px;
+    left: 50%;
+    transform: translateX(-50%);
+    white-space: nowrap;
+    font-size: 11px;
+    font-weight: 600;
+    color: #333;
+    background: rgba(255,255,255,.9);
+    padding: 1px 6px;
+    border-radius: 4px;
+    pointer-events: none;
+}
+
+/* Popup panels */

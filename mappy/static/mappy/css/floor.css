@@ -1,0 +1,123 @@
+    .content { max-width: 100%; padding: 12px; }
+    .floor-editor { display: flex; gap: 16px; height: calc(100vh - 160px); }
+    .floor-left { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+    .floor-wrap {
+        position: relative; overflow: hidden; border: 2px solid #c5cae9;
+        border-radius: 10px; background: #e8eaf6; cursor: grab; flex: 1; min-height: 0;
+    }
+    .floor-wrap.grabbing { cursor: grabbing; }
+    .floor-inner { transform-origin: 0 0; position: absolute; top: 0; left: 0; }
+    .floor-zoom-controls {
+        position: absolute; top: 10px; right: 10px;
+        display: flex; flex-direction: column; gap: 4px; z-index: 15;
+    }
+    .floor-zoom-controls button {
+        width: 34px; height: 34px; border: 1px solid #c5cae9; border-radius: 6px;
+        background: #fff; font-size: 1.2rem; cursor: pointer;
+        display: flex; align-items: center; justify-content: center;
+    }
+    .floor-zoom-controls button:hover { background: #e8eaf6; }
+    .side-panel-wrap { width: 320px; display: none; flex-direction: column; }
+    .side-panel-wrap.open { display: flex; }
+    .side-panel-spacer { flex: 0 0 auto; }
+    .side-panel-content {
+        flex: 1; background: #fff; border-radius: 10px;
+        box-shadow: 0 2px 12px rgba(0,0,0,.08); overflow-y: auto; padding: 16px;
+    }
+    .side-panel-content h3 { font-size: 1rem; color: #1a237e; margin-bottom: 12px; }
+    .side-panel-content .field-group { margin-bottom: 12px; }
+    .side-panel-content .field-group label { display: block; font-size: .8rem; color: #666; margin-bottom: 4px; }
+    .side-panel-content .field-group input,
+    .side-panel-content .field-group textarea,
+    .side-panel-content .field-group select { width: 100%; padding: 8px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: .9rem; }
+    .side-panel-content .field-group textarea { resize: vertical; min-height: 60px; }
+    .pan-hint {
+        position: absolute; bottom: 8px; left: 8px;
+        font-size: .72rem; color: #888; z-index: 10; pointer-events: none;
+        background: rgba(255,255,255,0.8); padding: 2px 6px; border-radius: 4px;
+    }
+
+/* === From main.css (floor editor) === */
+/* === FLOOR EDITOR === */
+.floor-editor {
+    display: flex;
+    gap: 16px;
+    height: calc(100vh - 160px);
+}
+.canvas-area {
+    flex: 1;
+    position: relative;
+    background: #e8eaf6;
+    border-radius: 10px;
+    overflow: hidden;
+    border: 2px solid #c5cae9;
+}
+.canvas-area canvas {
+    display: block;
+}
+.toolbar {
+    display: flex;
+    gap: 8px;
+    padding: 10px;
+    background: #fff;
+    border-bottom: 1px solid #e0e0e0;
+    flex-wrap: wrap;
+}
+.toolbar button, .toolbar label {
+    padding: 6px 14px;
+    border: 1px solid #c5cae9;
+    border-radius: 6px;
+    background: #fff;
+    cursor: pointer;
+    font-size: .85rem;
+    transition: all .15s;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+.toolbar button:hover, .toolbar label:hover {
+    background: #e8eaf6;
+}
+.toolbar button.active {
+    background: #3f51b5;
+    color: #fff;
+    border-color: #3f51b5;
+}
+
+/* Side panel for device properties */
+.side-panel {
+    width: 320px;
+    background: #fff;
+    border-radius: 10px;
+    box-shadow: 0 2px 12px rgba(0,0,0,.08);
+    overflow-y: auto;
+    padding: 16px;
+    display: none;
+}
+.side-panel.open { display: block; }
+.side-panel h3 {
+    font-size: 1rem;
+    color: #1a237e;
+    margin-bottom: 12px;
+}
+.side-panel .field-group {
+    margin-bottom: 12px;
+}
+.side-panel .field-group label {
+    display: block;
+    font-size: .8rem;
+    color: #666;
+    margin-bottom: 4px;
+}
+.side-panel .field-group input,
+.side-panel .field-group textarea,
+.side-panel .field-group select {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: .9rem;
+}
+.side-panel .field-group textarea { resize: vertical; min-height: 60px; }
+
+/* === DEVICE LIST (Admin) === */

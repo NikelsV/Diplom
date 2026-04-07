@@ -1,0 +1,88 @@
+    .dev-table-wrap { overflow-x: auto; }
+    .dev-table {
+        width: 100%; border-collapse: collapse; font-size: .85rem;
+    }
+    .dev-table th {
+        background: #1a237e; color: #fff; padding: 10px 12px;
+        text-align: left; white-space: nowrap; position: sticky; top: 0; z-index: 2;
+    }
+    .dev-table td {
+        padding: 8px 12px; border-bottom: 1px solid #e0e0e0;
+        vertical-align: middle;
+    }
+    .dev-table tr:hover td { background: #e8eaf6; }
+    .dev-table .actions { white-space: nowrap; }
+    .dev-table .actions button {
+        padding: 4px 10px; border: 1px solid #ddd; border-radius: 4px;
+        background: #fff; cursor: pointer; font-size: .8rem; margin-right: 4px;
+    }
+    .dev-table .actions button:hover { background: #e8eaf6; }
+    .dev-table .actions button.del { color: #e53935; border-color: #e53935; }
+    .dev-table .actions button.del:hover { background: #ffebee; }
+    .dev-table td.desc { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .dev-table td.desc:hover { white-space: normal; overflow: visible; }
+    .no-data { color: #999; padding: 20px; text-align: center; }
+
+/* === From main.css (device list) === */
+.device-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 16px;
+}
+.device-card {
+    background: #fff;
+    border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(0,0,0,.06);
+    padding: 16px;
+    display: flex;
+    gap: 14px;
+    transition: box-shadow .2s;
+}
+.device-card:hover {
+    box-shadow: 0 4px 20px rgba(0,0,0,.12);
+}
+.device-card .icon-wrap {
+    width: 56px;
+    height: 56px;
+    background: #e8eaf6;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+.device-card .icon-wrap img {
+    width: 36px;
+    height: 36px;
+    object-fit: contain;
+}
+.device-card .info { flex: 1; }
+.device-card .info h4 {
+    font-size: 1rem;
+    margin-bottom: 4px;
+    color: #1a237e;
+}
+.device-card .info p {
+    font-size: .82rem;
+    color: #666;
+    margin-bottom: 2px;
+}
+.device-card .actions {
+    display: flex;
+    gap: 6px;
+    margin-top: 10px;
+}
+.device-card .actions button {
+    padding: 4px 12px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    background: #fff;
+    cursor: pointer;
+    font-size: .8rem;
+}
+.device-card .actions button.delete {
+    color: #e53935;
+    border-color: #e53935;
+}
+
+/* Search / filter bar */

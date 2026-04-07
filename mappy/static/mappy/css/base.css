@@ -1,0 +1,206 @@
+/* === RESET, NAVBAR, CONTENT === */
+/* === RESET & BASE === */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: #f0f2f5;
+    color: #333;
+    min-height: 100vh;
+}
+
+/* === NAVBAR === */
+.navbar {
+    background: #1a237e;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    padding: 0 24px;
+    height: 56px;
+    box-shadow: 0 2px 8px rgba(0,0,0,.15);
+}
+.navbar-brand {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #fff;
+    text-decoration: none;
+    margin-right: 32px;
+}
+.navbar-links a {
+    color: #bbdefb;
+    text-decoration: none;
+    margin-right: 20px;
+    font-size: .95rem;
+    transition: color .2s;
+}
+.navbar-links a:hover { color: #fff; }
+
+/* === CONTENT === */
+.content {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 24px;
+}
+
+
+/* === POPUP PANEL === */
+.popup-panel {
+    position: absolute;
+    background: #fff;
+    border-radius: 10px;
+    box-shadow: 0 4px 20px rgba(0,0,0,.15);
+    padding: 16px;
+    min-width: 220px;
+    z-index: 50;
+    animation: fadeIn .2s;
+}
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+.popup-panel h3 {
+    font-size: 1rem;
+    color: #1a237e;
+    margin-bottom: 10px;
+    border-bottom: 1px solid #e8eaf6;
+    padding-bottom: 6px;
+}
+.popup-panel ul {
+    list-style: none;
+}
+.popup-panel ul li {
+    padding: 8px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background .15s;
+    font-size: .9rem;
+}
+.popup-panel ul li:hover {
+    background: #e8eaf6;
+}
+.popup-close {
+    position: absolute;
+    top: 8px;
+    right: 12px;
+    background: none;
+    border: none;
+    font-size: 1.2rem;
+    cursor: pointer;
+    color: #999;
+}
+
+/* === FILTER BAR === */
+.filter-bar {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+}
+.filter-bar input, .filter-bar select {
+    padding: 8px 14px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    font-size: .9rem;
+    min-width: 200px;
+}
+
+/* Modal */
+
+/* === MODALS, BUTTONS, TOASTS === */
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.4);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: fadeIn .2s;
+}
+.modal-box {
+    background: #fff;
+    border-radius: 12px;
+    padding: 24px;
+    min-width: 400px;
+    max-width: 600px;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 8px 40px rgba(0,0,0,.2);
+}
+.modal-box h2 {
+    font-size: 1.2rem;
+    color: #1a237e;
+    margin-bottom: 16px;
+}
+.modal-box .field-group {
+    margin-bottom: 14px;
+}
+.modal-box .field-group label {
+    display: block;
+    font-size: .85rem;
+    color: #555;
+    margin-bottom: 4px;
+}
+.modal-box .field-group input,
+.modal-box .field-group textarea,
+.modal-box .field-group select {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: .9rem;
+}
+.modal-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    margin-top: 16px;
+}
+.modal-actions button {
+    padding: 8px 20px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: .9rem;
+}
+.btn-primary {
+    background: #3f51b5;
+    color: #fff;
+}
+.btn-secondary {
+    background: #e0e0e0;
+    color: #333;
+}
+.btn-danger {
+    background: #e53935;
+    color: #fff;
+}
+
+/* Status indicator */
+.status-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    display: inline-block;
+}
+.status-dot.online { background: #4caf50; }
+.status-dot.offline { background: #e53935; }
+.status-dot.unknown { background: #bbb; }
+
+/* Toast notifications */
+.toast-container {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 9999;
+}
+.toast {
+    background: #333;
+    color: #fff;
+    padding: 12px 20px;
+    border-radius: 8px;
+    margin-top: 8px;
+    animation: fadeIn .3s;
+    font-size: .9rem;
+}
+.toast.error { background: #e53935; }
+.toast.success { background: #4caf50; }
