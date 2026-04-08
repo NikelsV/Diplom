@@ -1,0 +1,62 @@
+{% extends "mappy/base.html" %}
+{% load static %}
+
+{% block title %}WebMap — Область{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'mappy/css/region.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="map-container" style="padding:12px;">
+    <div class="map-header">
+        <h1 id="regionTitle">Область</h1>
+        <div class="breadcrumb" id="breadcrumb">
+            <a href="/">Россия</a> <span class="sep">›</span> <span id="bcRegionName">...</span>
+        </div>
+    </div>
+
+    <div class="region-toolbar">
+        <label class="upload-btn" title="Загрузить карту области">📁 Загрузить карту
+            <input type="file" id="mapUpload" accept="image/*" style="display:none;">
+        </label>
+        <button id="btnAddCity">➕ Добавить город</button>
+        <button id="btnDeleteCity">🗑 Удалить город</button>
+        <span class="hint" id="toolbarHint"></span>
+    </div>
+
+    <div class="region-wrap" id="regionWrap" data-region-id="{{ region_id }}">
+        <div class="region-inner" id="regionInner">
+            <img id="regionBgImg" style="display:none;">
+            <div id="cityDots"></div>
+        </div>
+        <div class="region-zoom-controls">
+            <button onclick="regZoomIn()">+</button>
+            <button onclick="regZoomOut()">−</button>
+            <button onclick="regZoomReset()">⌂</button>
+        </div>
+        <div class="region-no-map" id="noMapMsg">
+            Карта области не загружена.<br>Нажмите «📁 Загрузить карту».
+        </div>
+        <div class="pan-hint">ПКМ — перемещение, колесо — масштаб</div>
+    </div>
+
+    <div id="popupPanel" class="popup-panel" style="display:none;">
+        <button class="popup-close" onclick="closePopup()">&times;</button>
+        <h3 id="popupTitle"></h3>
+        <ul id="popupList"></ul>
+        <div id="popupExtra"></div>
+    </div>
+</div>
+
+{% include "mappy/includes/modal_city.html" %}
+{% include "mappy/includes/modal_office.html" %}
+{% include "mappy/includes/modal_floor.html" %}
+
+<div class="toast-container" id="toasts"></div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'mappy/js/common.js' %}"></script>
+<script src="{% static 'mappy/js/region.js' %}"></script>
+{% endblock %}

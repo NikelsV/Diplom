@@ -11,13 +11,6 @@
 <div class="map-container">
     <div class="map-header">
         <h1>Интерактивная карта сети</h1>
-        <div class="breadcrumb" id="breadcrumb"><span>Россия</span></div>
-    </div>
-
-    <div class="map-toolbar">
-        <button id="btnAddCity">➕ Добавить город</button>
-        <button id="btnDeleteCity">🗑 Удалить город</button>
-        <span class="hint" id="toolbarHint"></span>
     </div>
 
     <div class="russia-map-wrap" id="mapWrap" data-svg-url="{% static 'mappy/svg/russia_map.svg' %}">
@@ -30,20 +23,8 @@
             <button onclick="zoomOut()" title="Отдалить">−</button>
             <button onclick="zoomReset()" title="Сброс">⌂</button>
         </div>
-        <div id="cityDots"></div>
-    </div>
-
-    <div id="popupPanel" class="popup-panel" style="display:none;">
-        <button class="popup-close" onclick="closePopup()">&times;</button>
-        <h3 id="popupTitle"></h3>
-        <ul id="popupList"></ul>
-        <div id="popupExtra"></div>
     </div>
 </div>
-
-{% include "mappy/includes/modal_city.html" %}
-{% include "mappy/includes/modal_office.html" %}
-{% include "mappy/includes/modal_floor.html" %}
 
 <div class="toast-container" id="toasts"></div>
 {% endblock %}

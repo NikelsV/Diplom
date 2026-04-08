@@ -14,6 +14,16 @@ class RegionViewSet(viewsets.ModelViewSet):
     queryset = Region.objects.all()
     serializer_class = RegionSerializer
 
+    @action(detail=True, methods=['post'], url_path='upload-map')
+    def upload_map(self, request, pk=None):
+        """Загрузка карты области"""
+        region = self.get_object()
+        if 'map_image' not in request.FILES:
+            return Response({'error': 'Файл не передан'}, status=status.HTTP_400_BAD_REQUEST)
+        region.map_image = request.FILES['map_image']
+        region.save()
+        return Response(RegionSerializer(region).data)
+
 
 class CityViewSet(viewsets.ModelViewSet):
     queryset = City.objects.all()

@@ -5,6 +5,7 @@ class Region(models.Model):
     """Регион/область России"""
     name = models.CharField(max_length=100, verbose_name='Название')
     svg_id = models.CharField(max_length=50, verbose_name='ID на SVG-карте')
+    map_image = models.ImageField(upload_to='regions/', verbose_name='Карта области', blank=True, null=True)
 
     class Meta:
         verbose_name = 'Регион'

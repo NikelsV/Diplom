@@ -1,10 +1,16 @@
 from django.shortcuts import render, get_object_or_404
-from ..models import Floor
+from ..models import Region, Floor
 
 
 def map_view(request):
     """Главная страница — интерактивная карта России"""
     return render(request, 'mappy/map.html')
+
+
+def region_view(request, region_id):
+    """Страница карты области — города, офисы, этажи"""
+    region = get_object_or_404(Region, pk=region_id)
+    return render(request, 'mappy/region.html', {'region_id': region.id})
 
 
 def floor_view(request, floor_id):
