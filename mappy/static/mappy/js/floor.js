@@ -202,10 +202,11 @@ async function addDeviceToCanvas(dd) {
     label.offsetX(label.width()/2);
     group.add(label);
 
-    group.add(new Konva.Circle({ x: ICON_SIZE/2-4, y: -ICON_SIZE/2+4, radius: 5, fill: '#bbb', stroke: '#fff', strokeWidth: 1.5 }));
+    const statusDot = new Konva.Circle({ x: ICON_SIZE/2-4, y: -ICON_SIZE/2+4, radius: 5, fill: '#bbb', stroke: '#fff', strokeWidth: 1.5 });
+    group.add(statusDot);
 
     layer.add(group);
-    const entry = { id: dd.id, konvaGroup: group, data: dd, label };
+    const entry = { id: dd.id, konvaGroup: group, data: dd, label, statusDot };
     devices.push(entry);
 
     group.on('click tap', (e) => { e.cancelBubble = true; if (connectionMode) onConnectionClick(entry); else selectDevice(entry); });
@@ -249,6 +250,7 @@ function selectDevice(entry) {
     document.getElementById('fContact').value = d.contact_info || '';
     document.getElementById('sidePanel').classList.add('open');
     alignSidePanel();
+    loadMonitorConfigs(entry);
 }
 function deselectDevice() {
     if (selectedDevice) { try { if (selectedDevice.konvaGroup.getStage()) { selectedDevice.konvaGroup.children[0].stroke(''); selectedDevice.konvaGroup.children[0].strokeWidth(0); layer.draw(); } } catch(e){} }
@@ -379,15 +381,159 @@ async function loadDeviceTypes(){
 document.getElementById('btnAddDevice').addEventListener('click',openAddDeviceModal);
 document.getElementById('btnAddConnection').addEventListener('click',toggleConnectionMode);
 document.getElementById('btnDelete').addEventListener('click',deleteSelected);
+document.getElementById('btnPollFloor').addEventListener('click', pollFloor);
+
+// ==== Monitoring ====
+let availableProtocols = [];
+
+async function loadAvailableProtocols() {
+    availableProtocols = await apiFetch('../api/monitoring/available-protocols/') || [];
+    // Populate protocol selectors
+    const selects = [document.getElementById('pollProtocolSelect'), document.getElementById('devicePollProtocol')];
+    selects.forEach(sel => {
+        availableProtocols.forEach(p => {
+            const opt = document.createElement('option');
+            opt.value = p.poller_id;
+            opt.textContent = p.display_name;
+            sel.appendChild(opt);
+        });
+    });
+}
+
+async function loadMonitorConfigs(entry) {
+    const container = document.getElementById('monitorConfigs');
+    container.innerHTML = '<div style="color:#999;font-size:.8rem;">Загрузка...</div>';
+
+    const configs = await apiFetch('../api/monitoring/monitor-configs/?device=' + entry.id) || [];
+
+    container.innerHTML = '';
+    availableProtocols.forEach(proto => {
+        // Config now has protocol as FK id; match by poller_id
+        const existing = configs.find(c => c.poller_id === proto.poller_id);
+        const enabled = existing ? existing.enabled : false;
+        // Use effective_params from serializer (merged defaults+global+device)
+        const params = existing ? existing.effective_params : proto.default_params;
+        const configId = existing ? existing.id : null;
+
+        const div = document.createElement('div');
+        div.className = 'monitor-protocol';
+
+        let paramsHtml = '';
+        (proto.param_schema || []).forEach(ps => {
+            const val = params[ps.key] !== undefined ? params[ps.key] : ps.default;
+            paramsHtml += `<div class="monitor-param">
+                <label>${esc(ps.label)}</label>
+                <input type="${ps.type === 'number' ? 'number' : 'text'}" data-param-key="${ps.key}" value="${esc(String(val))}">
+            </div>`;
+        });
+
+        div.innerHTML = `
+            <div class="monitor-protocol-header">
+                <input type="checkbox" data-proto-id="${proto.id}" data-poller-id="${proto.poller_id}" data-config-id="${configId || ''}" ${enabled ? 'checked' : ''}>
+                <label>${esc(proto.display_name)}</label>
+            </div>
+            ${paramsHtml}
+        `;
+
+        const checkbox = div.querySelector('input[type="checkbox"]');
+        const paramInputs = div.querySelectorAll('.monitor-param input');
+
+        const saveConfig = async () => {
+            const isEnabled = checkbox.checked;
+            const newParams = {};
+            paramInputs.forEach(inp => {
+                const key = inp.dataset.paramKey;
+                newParams[key] = inp.type === 'number' ? parseFloat(inp.value) : inp.value;
+            });
+
+            const cid = checkbox.dataset.configId;
+            if (cid) {
+                await apiFetch('../api/monitoring/monitor-configs/' + cid + '/', {
+                    method: 'PATCH',
+                    body: JSON.stringify({ enabled: isEnabled, params: newParams })
+                });
+            } else {
+                // protocol field is now FK id (proto.id), not poller_id string
+                const result = await apiFetch('../api/monitoring/monitor-configs/', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        device: entry.id, protocol: proto.id,
+                        enabled: isEnabled, params: newParams
+                    })
+                });
+                if (result) checkbox.dataset.configId = result.id;
+            }
+        };
+
+        checkbox.addEventListener('change', saveConfig);
+        paramInputs.forEach(inp => {
+            let t = null;
+            inp.addEventListener('input', () => { if (t) clearTimeout(t); t = setTimeout(saveConfig, 800); });
+        });
+
+        container.appendChild(div);
+    });
+}
+
+async function pollSelectedDevice() {
+    if (!selectedDevice) { toast('Выберите устройство'); return; }
+    if (!selectedDevice.data.ip_address) { toast('У устройства нет IP-адреса', 'error'); return; }
+    const btn = document.getElementById('btnPollDevice');
+    const protocol = document.getElementById('devicePollProtocol').value;
+    const suffix = protocol ? '?protocol=' + protocol : '';
+    btn.disabled = true; btn.textContent = '📡 Опрос...';
+    const result = await apiFetch('../api/monitoring/poll/device/' + selectedDevice.id + '/' + suffix, { method: 'POST' });
+    btn.disabled = false; btn.textContent = '📡 Опросить устройство';
+    if (result && result.results) {
+        const protos = Object.keys(result.results);
+        const allOk = protos.length > 0 && protos.every(p => result.results[p].success);
+        const anyFail = protos.some(p => !result.results[p].success);
+        if (protos.length === 0) toast('Мониторинг не настроен');
+        else if (allOk) toast('Устройство доступно', 'success');
+        else toast('Устройство недоступно', 'error');
+        updateDeviceStatusDot(selectedDevice, protos.length === 0 ? null : allOk ? true : false);
+    }
+    await loadDeviceStatuses();
+}
+
+async function pollFloor() {
+    const btn = document.getElementById('btnPollFloor');
+    const protocol = document.getElementById('pollProtocolSelect').value;
+    const suffix = protocol ? '?protocol=' + protocol : '';
+    btn.disabled = true; btn.textContent = '📡 Опрос...';
+    await apiFetch('../api/monitoring/poll/floor/' + FLOOR_ID + '/' + suffix, { method: 'POST' });
+    btn.disabled = false; btn.textContent = '📡 Опросить этаж';
+    toast('Этаж опрошен', 'success');
+    await loadDeviceStatuses();
+}
+
+function updateDeviceStatusDot(entry, status) {
+    if (!entry.statusDot) return;
+    if (status === true) entry.statusDot.fill('#4caf50');
+    else if (status === false) entry.statusDot.fill('#e53935');
+    else entry.statusDot.fill('#bbb');
+    layer.batchDraw();
+}
+
+async function loadDeviceStatuses() {
+    const result = await apiFetch('../api/monitoring/status/floor/' + FLOOR_ID + '/');
+    if (!result || !result.devices) return;
+    for (const entry of devices) {
+        const status = result.devices[String(entry.id)];
+        updateDeviceStatusDot(entry, status === undefined ? null : status);
+    }
+}
 
 // ==== Init ====
 (async function init(){
     initStage();
     initFloorZoomPan();
     await loadDeviceTypes();
+    await loadAvailableProtocols();
     await loadFloorData();
     await loadDevices();
     await loadConnections();
+    await loadDeviceStatuses();
     setupAutoSave();
     setupMapUpload();
     alignSidePanel();

@@ -22,6 +22,10 @@
                 <button id="btnAddDevice">➕ Устройство</button>
                 <button id="btnAddConnection">🔗 Связь</button>
                 <button id="btnDelete">🗑 Удалить</button>
+                <select id="pollProtocolSelect" style="font-size:.85rem;padding:4px 8px;border:1px solid #c5cae9;border-radius:6px;">
+                    <option value="">Все протоколы</option>
+                </select>
+                <button id="btnPollFloor" title="Опросить все устройства этажа">📡 Опросить этаж</button>
                 <span id="modeLabel" style="margin-left:auto;font-size:.85rem;color:#888;"></span>
             </div>
             <div class="floor-wrap" id="floorWrap" data-floor-id="{{ floor_id }}">
@@ -49,6 +53,19 @@
                 <div class="field-group"><label>Ответственное лицо</label><input id="fPerson" type="text"></div>
                 <div class="field-group"><label>Контактные данные</label><input id="fContact" type="text"></div>
                 <div style="margin-top:8px;font-size:.78rem;color:#999;">Авто-сохранение</div>
+
+                <!-- Мониторинг -->
+                <hr style="margin:16px 0;border:none;border-top:1px solid #e0e0e0;">
+                <h3>Мониторинг</h3>
+                <div id="monitorSection">
+                    <div id="monitorConfigs"></div>
+                    <div style="margin-top:10px;">
+                        <select id="devicePollProtocol" style="width:100%;padding:6px;border:1px solid #ddd;border-radius:4px;font-size:.85rem;margin-bottom:6px;">
+                            <option value="">Все протоколы</option>
+                        </select>
+                        <button id="btnPollDevice" class="monitor-btn" onclick="pollSelectedDevice()">📡 Опросить устройство</button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>

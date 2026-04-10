@@ -21,6 +21,7 @@ async function loadMap() {
     initMapInteraction();
     initZoomPan();
     await getRegionsFromDB();
+    await loadRegionStatuses();
 }
 
 function getSvg() { return document.getElementById('russia-map'); }
@@ -98,5 +99,35 @@ function applyTransform() {
 function zoomIn() { const wr=document.getElementById('mapWrap').getBoundingClientRect(),cx=wr.width/2,cy=wr.height/2,old=scale; scale=Math.min(8,scale*1.3); panX=cx-(cx-panX)*(scale/old); panY=cy-(cy-panY)*(scale/old); applyTransform(); }
 function zoomOut() { const wr=document.getElementById('mapWrap').getBoundingClientRect(),cx=wr.width/2,cy=wr.height/2,old=scale; scale=Math.max(0.5,scale/1.3); panX=cx-(cx-panX)*(scale/old); panY=cy-(cy-panY)*(scale/old); applyTransform(); }
 function zoomReset() { scale=1; panX=0; panY=0; applyTransform(); }
+
+// ==== Region status coloring on SVG ====
+async function loadRegionStatuses() {
+    if (!allRegionsFromDB) return;
+    for (const region of allRegionsFromDB) {
+        try {
+            const resp = await fetch('/api/monitoring/status/region/' + region.id + '/', {
+                headers: {'Content-Type':'application/json'}
+            });
+            if (!resp.ok) continue;
+            const data = await resp.json();
+            colorRegionPaths(region.svg_id, data.status);
+        } catch(e) { /* skip */ }
+    }
+}
+
+function colorRegionPaths(svgId, status) {
+    // Find all paths with this data-fill (or data-group)
+    const paths = document.querySelectorAll(
+        `#russia-map .region[data-fill="${svgId}"], #russia-map .region[data-group="${svgId}"]`
+    );
+    paths.forEach(p => {
+        if (status === true) {
+            p.style.fill = '#4caf50'; p.style.opacity = '0.8';
+        } else if (status === false) {
+            p.style.fill = '#e53935'; p.style.opacity = '0.8';
+        }
+        // status === null → leave original color (not monitored)
+    });
+}
 
 loadMap();

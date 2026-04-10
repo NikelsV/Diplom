@@ -22,6 +22,7 @@ from django.conf.urls.static import static
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('', include('mappy.urls')),
+    path('api/monitoring/', include('monitoring.urls')),
 ]
 
 # Раздача медиа-файлов в режиме разработки

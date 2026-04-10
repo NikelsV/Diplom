@@ -121,3 +121,26 @@
 .side-panel .field-group textarea { resize: vertical; min-height: 60px; }
 
 /* === DEVICE LIST (Admin) === */
+
+/* ==== Monitoring ==== */
+.monitor-protocol {
+    background: #f5f5f5; border-radius: 6px; padding: 10px; margin-bottom: 8px;
+}
+.monitor-protocol-header {
+    display: flex; align-items: center; gap: 8px; margin-bottom: 6px;
+}
+.monitor-protocol-header label { font-weight: 600; font-size: .85rem; flex: 1; margin: 0; }
+.monitor-protocol-header input[type="checkbox"] { width: 18px; height: 18px; }
+.monitor-param { margin-bottom: 4px; }
+.monitor-param label { font-size: .75rem; color: #666; display: block; margin-bottom: 2px; }
+.monitor-param input { width: 100%; padding: 4px 8px; border: 1px solid #ddd; border-radius: 4px; font-size: .8rem; }
+.monitor-btn {
+    display: block; width: 100%; margin-top: 10px; padding: 8px;
+    border: 1px solid #1565c0; border-radius: 6px; background: #e3f2fd;
+    color: #1565c0; cursor: pointer; font-size: .85rem; text-align: center;
+}
+.monitor-btn:hover { background: #bbdefb; }
+.monitor-btn:disabled { opacity: 0.5; cursor: wait; }
+.status-dot-ok { fill: #4caf50 !important; }
+.status-dot-fail { fill: #e53935 !important; }
+.status-dot-none { fill: #bbb !important; }

@@ -90,7 +90,10 @@ async function loadRegion() {
     document.getElementById('bcRegionName').textContent = regionData.name;
     if (regionData.map_image) loadBgImage(regionData.map_image);
     const cities = await apiFetch('cities/?region=' + REGION_ID);
-    showCityDots(cities || []);
+    // Load monitoring status for the region
+    const statusResp = await apiFetch('../api/monitoring/status/region/' + REGION_ID + '/');
+    const cityStatuses = statusResp ? statusResp.cities : null;
+    showCityDots(cities || [], cityStatuses);
 }
 
 function loadBgImage(url) {
@@ -110,7 +113,7 @@ function loadBgImage(url) {
 // ==== City dots ====
 function clearCityDots() { document.getElementById('cityDots').innerHTML = ''; }
 
-function showCityDots(cities) {
+function showCityDots(cities, statusData) {
     clearCityDots();
     if (!imgW || !imgH) return;
     cities.forEach(city => {
@@ -120,6 +123,12 @@ function showCityDots(cities) {
         dot.style.left = city.x + 'px';
         dot.style.top = city.y + 'px';
         dot.style.transform = `translate(-50%,-50%) scale(${1/rScale})`;
+        // Status coloring
+        if (statusData) {
+            const cs = statusData.find(c => c.id === city.id);
+            if (cs && cs.status === true) dot.style.background = '#4caf50';
+            else if (cs && cs.status === false) dot.style.background = '#e53935';
+        }
         dot.innerHTML = `<span class="city-label">${esc(city.name)}</span>`;
         dot.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -205,14 +214,28 @@ async function onCityClick(city, dotEl) {
     showOfficePopup(city, offices, dotEl);
 }
 
-function showOfficePopup(city, offices, anchorEl) {
+async function showOfficePopup(city, offices, anchorEl) {
     const panel = document.getElementById('popupPanel');
     document.getElementById('popupTitle').textContent = 'Офисы — ' + city.name;
     const list = document.getElementById('popupList');
     list.innerHTML = '';
+
+    // Fetch city status for office coloring
+    let cityStatus = null;
+    const regionStatus = await apiFetch('../api/monitoring/status/region/' + REGION_ID + '/');
+    if (regionStatus && regionStatus.cities) {
+        cityStatus = regionStatus.cities.find(c => c.id === city.id);
+    }
+
     offices.forEach(o => {
         const li = document.createElement('li');
-        li.textContent = o.name + (o.address ? ' — ' + o.address : '');
+        let statusIcon = '';
+        if (cityStatus && cityStatus.offices) {
+            const os = cityStatus.offices.find(x => x.id === o.id);
+            if (os && os.status === true) statusIcon = '<span style="color:#4caf50;">●</span> ';
+            else if (os && os.status === false) statusIcon = '<span style="color:#e53935;">●</span> ';
+        }
+        li.innerHTML = statusIcon + esc(o.name) + (o.address ? ' — ' + esc(o.address) : '');
         li.addEventListener('click', () => onOfficeClick(o, city));
         list.appendChild(li);
     });
@@ -221,6 +244,20 @@ function showOfficePopup(city, offices, anchorEl) {
     extra.innerHTML = '';
     const addBtn = document.createElement('button'); addBtn.className='popup-add-btn'; addBtn.textContent='+ Добавить офис';
     addBtn.addEventListener('click', () => openAddOfficeModal(city)); extra.appendChild(addBtn);
+    // Poll city button
+    const pollBtn = document.createElement('button'); pollBtn.className='popup-add-btn'; pollBtn.style.borderColor='#1565c0'; pollBtn.style.color='#1565c0'; pollBtn.style.background='#e3f2fd';
+    pollBtn.textContent = '📡 Опросить город';
+    pollBtn.addEventListener('click', async () => {
+        pollBtn.disabled = true; pollBtn.textContent = '📡 Опрос...';
+        await apiFetch('../api/monitoring/poll/city/' + city.id + '/' + getProtocolSuffix(), { method: 'POST' });
+        pollBtn.disabled = false; pollBtn.textContent = '📡 Опросить город';
+        toast('Город опрошен', 'success');
+        // Reload statuses
+        const cities = await apiFetch('cities/?region=' + REGION_ID);
+        const sr = await apiFetch('../api/monitoring/status/region/' + REGION_ID + '/');
+        showCityDots(cities || [], sr ? sr.cities : null);
+    });
+    extra.appendChild(pollBtn);
     positionPopup(panel, anchorEl);
 }
 
@@ -240,14 +277,46 @@ async function confirmAddOffice() {
 let currentOffice = null, currentCity = null;
 async function onOfficeClick(office, city) { currentOffice = office; currentCity = city; const floors = await apiFetch('floors/?office=' + office.id) || []; showFloorPopup(office, city, floors); }
 
-function showFloorPopup(office, city, floors) {
+async function showFloorPopup(office, city, floors) {
     document.getElementById('popupTitle').textContent = 'Этажи — ' + office.name;
     const list = document.getElementById('popupList');
     list.innerHTML = '';
-    floors.forEach(f => { const li = document.createElement('li'); li.textContent = 'Этаж ' + f.number; li.addEventListener('click', () => { window.location.href = '/floor/' + f.id + '/'; }); list.appendChild(li); });
+
+    // Fetch status for floor coloring
+    let officeStatus = null;
+    const regionStatus = await apiFetch('../api/monitoring/status/region/' + REGION_ID + '/');
+    if (regionStatus && regionStatus.cities) {
+        const cs = regionStatus.cities.find(c => c.id === city.id);
+        if (cs && cs.offices) officeStatus = cs.offices.find(o => o.id === office.id);
+    }
+
+    floors.forEach(f => {
+        const li = document.createElement('li');
+        let statusIcon = '';
+        if (officeStatus && officeStatus.floors) {
+            const fs = officeStatus.floors.find(x => x.id === f.id);
+            if (fs && fs.status === true) statusIcon = '<span style="color:#4caf50;">●</span> ';
+            else if (fs && fs.status === false) statusIcon = '<span style="color:#e53935;">●</span> ';
+        }
+        li.innerHTML = statusIcon + 'Этаж ' + f.number;
+        li.addEventListener('click', () => { window.location.href = '/floor/' + f.id + '/'; });
+        list.appendChild(li);
+    });
     if (!floors.length) { const li = document.createElement('li'); li.style.color='#999'; li.style.cursor='default'; li.textContent='Нет этажей'; list.appendChild(li); }
     const extra = document.getElementById('popupExtra'); extra.innerHTML = '';
     const addBtn = document.createElement('button'); addBtn.className='popup-add-btn'; addBtn.textContent='+ Добавить этаж'; addBtn.addEventListener('click', () => openAddFloorModal(office)); extra.appendChild(addBtn);
+    // Poll office button
+    const pollBtn = document.createElement('button'); pollBtn.className='popup-add-btn'; pollBtn.style.borderColor='#1565c0'; pollBtn.style.color='#1565c0'; pollBtn.style.background='#e3f2fd';
+    pollBtn.textContent = '📡 Опросить офис';
+    pollBtn.addEventListener('click', async () => {
+        pollBtn.disabled = true; pollBtn.textContent = '📡 Опрос...';
+        await apiFetch('../api/monitoring/poll/office/' + office.id + '/' + getProtocolSuffix(), { method: 'POST' });
+        pollBtn.disabled = false; pollBtn.textContent = '📡 Опросить офис';
+        toast('Офис опрошен', 'success');
+        const fl = await apiFetch('floors/?office=' + office.id) || [];
+        showFloorPopup(office, city, fl);
+    });
+    extra.appendChild(pollBtn);
     const delBtn = document.createElement('button'); delBtn.className='popup-del-btn'; delBtn.textContent='🗑 Удалить офис'; delBtn.addEventListener('click', () => tryDeleteOffice(office, city)); extra.appendChild(delBtn);
 }
 
@@ -296,6 +365,40 @@ function positionPopup(panel, anchorEl) {
 }
 function closePopup() { document.getElementById('popupPanel').style.display = 'none'; }
 
+// ==== Poll region ====
+let availableProtocols = [];
+
+async function loadAvailableProtocols() {
+    availableProtocols = await apiFetch('../api/monitoring/available-protocols/') || [];
+    const sel = document.getElementById('pollProtocolSelect');
+    availableProtocols.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p.poller_id;
+        opt.textContent = p.display_name;
+        sel.appendChild(opt);
+    });
+}
+
+function getProtocolSuffix() {
+    const v = document.getElementById('pollProtocolSelect').value;
+    return v ? '?protocol=' + v : '';
+}
+
+document.getElementById('btnPollRegion').addEventListener('click', async () => {
+    const btn = document.getElementById('btnPollRegion');
+    btn.disabled = true; btn.textContent = '📡 Опрос...';
+    await apiFetch('../api/monitoring/poll/region/' + REGION_ID + '/' + getProtocolSuffix(), { method: 'POST' });
+    btn.disabled = false; btn.textContent = '📡 Опросить регион';
+    toast('Регион опрошен', 'success');
+    const cities = await apiFetch('cities/?region=' + REGION_ID);
+    const sr = await apiFetch('../api/monitoring/status/region/' + REGION_ID + '/');
+    showCityDots(cities || [], sr ? sr.cities : null);
+});
+
 // ==== Init ====
-initRegionZoomPan();
-loadRegion();
+async function initAll() {
+    await loadAvailableProtocols();
+    initRegionZoomPan();
+    await loadRegion();
+}
+initAll();
