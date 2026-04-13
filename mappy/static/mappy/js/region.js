@@ -91,7 +91,7 @@ async function loadRegion() {
     if (regionData.map_image) loadBgImage(regionData.map_image);
     const cities = await apiFetch('cities/?region=' + REGION_ID);
     // Load monitoring status for the region
-    const statusResp = await apiFetch('../api/monitoring/status/region/' + REGION_ID + '/');
+    const statusResp = await apiFetch('monitoring/status/region/' + REGION_ID + '/');
     const cityStatuses = statusResp ? statusResp.cities : null;
     showCityDots(cities || [], cityStatuses);
 }
@@ -222,7 +222,7 @@ async function showOfficePopup(city, offices, anchorEl) {
 
     // Fetch city status for office coloring
     let cityStatus = null;
-    const regionStatus = await apiFetch('../api/monitoring/status/region/' + REGION_ID + '/');
+    const regionStatus = await apiFetch('monitoring/status/region/' + REGION_ID + '/');
     if (regionStatus && regionStatus.cities) {
         cityStatus = regionStatus.cities.find(c => c.id === city.id);
     }
@@ -249,12 +249,12 @@ async function showOfficePopup(city, offices, anchorEl) {
     pollBtn.textContent = '📡 Опросить город';
     pollBtn.addEventListener('click', async () => {
         pollBtn.disabled = true; pollBtn.textContent = '📡 Опрос...';
-        await apiFetch('../api/monitoring/poll/city/' + city.id + '/' + getProtocolSuffix(), { method: 'POST' });
+        await apiFetch('monitoring/poll/city/' + city.id + '/' + getProtocolSuffix(), { method: 'POST' });
         pollBtn.disabled = false; pollBtn.textContent = '📡 Опросить город';
         toast('Город опрошен', 'success');
         // Reload statuses
         const cities = await apiFetch('cities/?region=' + REGION_ID);
-        const sr = await apiFetch('../api/monitoring/status/region/' + REGION_ID + '/');
+        const sr = await apiFetch('monitoring/status/region/' + REGION_ID + '/');
         showCityDots(cities || [], sr ? sr.cities : null);
     });
     extra.appendChild(pollBtn);
@@ -284,7 +284,7 @@ async function showFloorPopup(office, city, floors) {
 
     // Fetch status for floor coloring
     let officeStatus = null;
-    const regionStatus = await apiFetch('../api/monitoring/status/region/' + REGION_ID + '/');
+    const regionStatus = await apiFetch('monitoring/status/region/' + REGION_ID + '/');
     if (regionStatus && regionStatus.cities) {
         const cs = regionStatus.cities.find(c => c.id === city.id);
         if (cs && cs.offices) officeStatus = cs.offices.find(o => o.id === office.id);
@@ -310,7 +310,7 @@ async function showFloorPopup(office, city, floors) {
     pollBtn.textContent = '📡 Опросить офис';
     pollBtn.addEventListener('click', async () => {
         pollBtn.disabled = true; pollBtn.textContent = '📡 Опрос...';
-        await apiFetch('../api/monitoring/poll/office/' + office.id + '/' + getProtocolSuffix(), { method: 'POST' });
+        await apiFetch('monitoring/poll/office/' + office.id + '/' + getProtocolSuffix(), { method: 'POST' });
         pollBtn.disabled = false; pollBtn.textContent = '📡 Опросить офис';
         toast('Офис опрошен', 'success');
         const fl = await apiFetch('floors/?office=' + office.id) || [];
@@ -369,7 +369,7 @@ function closePopup() { document.getElementById('popupPanel').style.display = 'n
 let availableProtocols = [];
 
 async function loadAvailableProtocols() {
-    availableProtocols = await apiFetch('../api/monitoring/available-protocols/') || [];
+    availableProtocols = await apiFetch('monitoring/available-protocols/') || [];
     const sel = document.getElementById('pollProtocolSelect');
     availableProtocols.forEach(p => {
         const opt = document.createElement('option');
@@ -387,11 +387,11 @@ function getProtocolSuffix() {
 document.getElementById('btnPollRegion').addEventListener('click', async () => {
     const btn = document.getElementById('btnPollRegion');
     btn.disabled = true; btn.textContent = '📡 Опрос...';
-    await apiFetch('../api/monitoring/poll/region/' + REGION_ID + '/' + getProtocolSuffix(), { method: 'POST' });
+    await apiFetch('monitoring/poll/region/' + REGION_ID + '/' + getProtocolSuffix(), { method: 'POST' });
     btn.disabled = false; btn.textContent = '📡 Опросить регион';
     toast('Регион опрошен', 'success');
     const cities = await apiFetch('cities/?region=' + REGION_ID);
-    const sr = await apiFetch('../api/monitoring/status/region/' + REGION_ID + '/');
+    const sr = await apiFetch('monitoring/status/region/' + REGION_ID + '/');
     showCityDots(cities || [], sr ? sr.cities : null);
 });
 

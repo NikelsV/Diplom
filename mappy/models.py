@@ -89,6 +89,9 @@ class Device(models.Model):
     # Позиция на канвасе этажа
     x = models.FloatField(verbose_name='Позиция X', default=100)
     y = models.FloatField(verbose_name='Позиция Y', default=100)
+    visible_on_map = models.BooleanField(verbose_name='Отображать на карте', default=True)
+    icon_scale = models.FloatField(verbose_name='Масштаб иконки', default=1.0,
+                                   help_text='1.0 = стандартный размер, 0.5 = в два раза меньше, 2.0 = в два раза больше')
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

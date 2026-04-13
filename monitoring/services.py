@@ -85,7 +85,7 @@ def get_device_status(device):
 
 def get_floor_status(floor):
     from mappy.models import Device
-    devices = Device.objects.filter(floor=floor)
+    devices = Device.objects.filter(floor=floor, visible_on_map=True)
     if not devices.exists():
         return None
     has_any = False
@@ -137,7 +137,7 @@ def get_region_status(region):
 def poll_floor(floor, protocol_id=None):
     from mappy.models import Device
     results = {}
-    for device in Device.objects.filter(floor=floor):
+    for device in Device.objects.filter(floor=floor, visible_on_map=True):
         results[device.id] = poll_device(device, protocol_id)
     return results
 

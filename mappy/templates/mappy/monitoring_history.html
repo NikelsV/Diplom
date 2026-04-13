@@ -1,0 +1,56 @@
+{% extends "mappy/base.html" %}
+{% load static %}
+
+{% block title %}WebMap — Мониторинг{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'mappy/css/monitoring.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="map-container">
+    <div class="map-header">
+        <h1>История мониторинга</h1>
+    </div>
+
+    <div class="filter-bar">
+        <input type="text" id="searchInput" placeholder="Поиск по имени устройства, IP...">
+        <select id="filterProtocol"><option value="">Все протоколы</option></select>
+        <select id="filterStatus">
+            <option value="">Все статусы</option>
+            <option value="true">Доступен</option>
+            <option value="false">Недоступен</option>
+        </select>
+        <select id="filterSort">
+            <option value="-started_at">Сначала новые</option>
+            <option value="started_at">Сначала старые</option>
+        </select>
+    </div>
+
+    <div class="mon-table-wrap">
+        <table class="mon-table" id="monTable">
+            <thead>
+                <tr>
+                    <th>Статус</th>
+                    <th>Устройство</th>
+                    <th>IP</th>
+                    <th>Протокол</th>
+                    <th>Начало</th>
+                    <th>Конец</th>
+                    <th>Длительность</th>
+                    <th>Детали</th>
+                </tr>
+            </thead>
+            <tbody id="monBody"></tbody>
+        </table>
+        <div class="no-data" id="noData" style="display:none;">Нет записей</div>
+    </div>
+</div>
+
+<div class="toast-container" id="toasts"></div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'mappy/js/common.js' %}"></script>
+<script src="{% static 'mappy/js/monitoring_history.js' %}"></script>
+{% endblock %}

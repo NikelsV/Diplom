@@ -127,7 +127,7 @@ class MonitoringHistory(models.Model):
     Новая запись только при СМЕНЕ статуса.
     """
     device = models.ForeignKey(
-        'mappy.Device', on_delete=models.CASCADE,
+        'mappy.Device', on_delete=models.SET_NULL, null=True, blank=True,
         related_name='monitoring_history', verbose_name='Устройство'
     )
     protocol = models.ForeignKey(

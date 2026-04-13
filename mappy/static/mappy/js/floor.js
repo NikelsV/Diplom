@@ -161,7 +161,10 @@ async function loadFloorData() {
 async function loadDevices() {
     const data = await apiFetch('devices/?floor=' + FLOOR_ID);
     if (!data) return;
-    for (const d of data) await addDeviceToCanvas(d);
+    for (const d of data) {
+        if (d.visible_on_map === false) continue; // скрытые не показываем
+        await addDeviceToCanvas(d);
+    }
     layer.draw();
 }
 
@@ -180,11 +183,12 @@ function rebuildDeviceConnectionMap() {
 async function addDeviceToCanvas(dd) {
     const gx = (dd.x || 100) + padX;
     const gy = (dd.y || 100) + padY;
+    const sc = dd.icon_scale || 1.0;
+    const size = ICON_SIZE * sc;
     const group = new Konva.Group({
         x: gx, y: gy, draggable: true,
         dragBoundFunc: function(pos) {
-            // Clamp to stage bounds
-            const margin = ICON_SIZE / 2;
+            const margin = size / 2;
             return {
                 x: Math.max(margin, Math.min(stage.width() - margin, pos.x)),
                 y: Math.max(margin, Math.min(stage.height() - margin, pos.y)),
@@ -194,15 +198,15 @@ async function addDeviceToCanvas(dd) {
 
     const iconUrl = getDeviceIconUrl(dd);
     let iconNode;
-    if (iconUrl) { const img = await loadIcon(iconUrl); if (img) iconNode = new Konva.Image({ image: img, width: ICON_SIZE, height: ICON_SIZE, offsetX: ICON_SIZE/2, offsetY: ICON_SIZE/2 }); }
-    if (!iconNode) iconNode = new Konva.Rect({ width: ICON_SIZE, height: ICON_SIZE, offsetX: ICON_SIZE/2, offsetY: ICON_SIZE/2, fill: '#7986cb', cornerRadius: 8 });
+    if (iconUrl) { const img = await loadIcon(iconUrl); if (img) iconNode = new Konva.Image({ image: img, width: size, height: size, offsetX: size/2, offsetY: size/2 }); }
+    if (!iconNode) iconNode = new Konva.Rect({ width: size, height: size, offsetX: size/2, offsetY: size/2, fill: '#7986cb', cornerRadius: 8 });
     group.add(iconNode);
 
-    const label = new Konva.Text({ text: dd.name || 'Устройство', fontSize: 11, fill: '#333', align: 'center', y: ICON_SIZE/2+4 });
+    const label = new Konva.Text({ text: dd.name || 'Устройство', fontSize: 11, fill: '#333', align: 'center', y: size/2+4 });
     label.offsetX(label.width()/2);
     group.add(label);
 
-    const statusDot = new Konva.Circle({ x: ICON_SIZE/2-4, y: -ICON_SIZE/2+4, radius: 5, fill: '#bbb', stroke: '#fff', strokeWidth: 1.5 });
+    const statusDot = new Konva.Circle({ x: size/2-4, y: -size/2+4, radius: 5, fill: '#bbb', stroke: '#fff', strokeWidth: 1.5 });
     group.add(statusDot);
 
     layer.add(group);
@@ -248,6 +252,9 @@ function selectDevice(entry) {
     document.getElementById('fDesc').value = d.description || '';
     document.getElementById('fPerson').value = d.responsible_person || '';
     document.getElementById('fContact').value = d.contact_info || '';
+    const scaleSlider = document.getElementById('fIconScale');
+    scaleSlider.value = d.icon_scale || 1.0;
+    document.getElementById('fIconScaleVal').textContent = scaleSlider.value;
     document.getElementById('sidePanel').classList.add('open');
     alignSidePanel();
     loadMonitorConfigs(entry);
@@ -261,13 +268,17 @@ function deselectDevice() {
 // ==== Auto-save ====
 let saveTimeout = null;
 function setupAutoSave() {
-    ['fName','fModel','fIP','fMAC','fDesc','fPerson','fContact','fDeviceType'].forEach(id => {
+    ['fName','fModel','fIP','fMAC','fDesc','fPerson','fContact','fDeviceType','fIconScale'].forEach(id => {
         document.getElementById(id).addEventListener('input', () => { if(saveTimeout)clearTimeout(saveTimeout); saveTimeout=setTimeout(saveDeviceFields,800); });
+    });
+    // Live update scale label
+    document.getElementById('fIconScale').addEventListener('input', () => {
+        document.getElementById('fIconScaleVal').textContent = document.getElementById('fIconScale').value;
     });
 }
 async function saveDeviceFields() {
     if (!selectedDevice) return;
-    const body = { name:document.getElementById('fName').value, model:document.getElementById('fModel').value, ip_address:document.getElementById('fIP').value||null, mac_address:document.getElementById('fMAC').value, description:document.getElementById('fDesc').value, responsible_person:document.getElementById('fPerson').value, contact_info:document.getElementById('fContact').value, device_type:document.getElementById('fDeviceType').value||null };
+    const body = { name:document.getElementById('fName').value, model:document.getElementById('fModel').value, ip_address:document.getElementById('fIP').value||null, mac_address:document.getElementById('fMAC').value, description:document.getElementById('fDesc').value, responsible_person:document.getElementById('fPerson').value, contact_info:document.getElementById('fContact').value, device_type:document.getElementById('fDeviceType').value||null, icon_scale:parseFloat(document.getElementById('fIconScale').value)||1.0 };
     const r = await apiFetch('devices/'+selectedDevice.data.id+'/', { method:'PATCH', body:JSON.stringify(body) });
     if (r) { Object.assign(selectedDevice.data,r); selectedDevice.label.text(r.name||'Устройство'); selectedDevice.label.offsetX(selectedDevice.label.width()/2); layer.draw(); toast('Сохранено','success'); }
 }
@@ -334,14 +345,15 @@ async function confirmAddDevice(){
 }
 async function deleteSelected(){
     if(!selectedDevice){toast('Выберите устройство');return;}
-    if(!confirm('Удалить «'+selectedDevice.data.name+'»?'))return;
+    if(!confirm('Убрать «'+selectedDevice.data.name+'» с карты?'))return;
     const id=selectedDevice.id,group=selectedDevice.konvaGroup;
     selectedDevice=null;document.getElementById('sidePanel').classList.remove('open');
-    await apiFetch('devices/'+id+'/',{method:'DELETE'});
+    // Hide from map, don't delete from DB
+    await apiFetch('devices/'+id+'/',{method:'PATCH',body:JSON.stringify({visible_on_map:false})});
     connections=connections.filter(c=>{if(c.data.device_a===id||c.data.device_b===id){c.konvaLine.destroy();c.waypointCircles.forEach(w=>w.destroy());return false;}return true;});
     rebuildDeviceConnectionMap();
     group.destroy();devices=devices.filter(d=>d.id!==id);
-    layer.draw();connectionsLayer.draw();toast('Удалено','success');
+    layer.draw();connectionsLayer.draw();toast('Устройство скрыто с карты','success');
 }
 
 // ==== Upload map ====
@@ -387,7 +399,7 @@ document.getElementById('btnPollFloor').addEventListener('click', pollFloor);
 let availableProtocols = [];
 
 async function loadAvailableProtocols() {
-    availableProtocols = await apiFetch('../api/monitoring/available-protocols/') || [];
+    availableProtocols = await apiFetch('monitoring/available-protocols/') || [];
     // Populate protocol selectors
     const selects = [document.getElementById('pollProtocolSelect'), document.getElementById('devicePollProtocol')];
     selects.forEach(sel => {
@@ -404,7 +416,7 @@ async function loadMonitorConfigs(entry) {
     const container = document.getElementById('monitorConfigs');
     container.innerHTML = '<div style="color:#999;font-size:.8rem;">Загрузка...</div>';
 
-    const configs = await apiFetch('../api/monitoring/monitor-configs/?device=' + entry.id) || [];
+    const configs = await apiFetch('monitoring/monitor-configs/?device=' + entry.id) || [];
 
     container.innerHTML = '';
     availableProtocols.forEach(proto => {
@@ -448,13 +460,13 @@ async function loadMonitorConfigs(entry) {
 
             const cid = checkbox.dataset.configId;
             if (cid) {
-                await apiFetch('../api/monitoring/monitor-configs/' + cid + '/', {
+                await apiFetch('monitoring/monitor-configs/' + cid + '/', {
                     method: 'PATCH',
                     body: JSON.stringify({ enabled: isEnabled, params: newParams })
                 });
             } else {
                 // protocol field is now FK id (proto.id), not poller_id string
-                const result = await apiFetch('../api/monitoring/monitor-configs/', {
+                const result = await apiFetch('monitoring/monitor-configs/', {
                     method: 'POST',
                     body: JSON.stringify({
                         device: entry.id, protocol: proto.id,
@@ -482,7 +494,7 @@ async function pollSelectedDevice() {
     const protocol = document.getElementById('devicePollProtocol').value;
     const suffix = protocol ? '?protocol=' + protocol : '';
     btn.disabled = true; btn.textContent = '📡 Опрос...';
-    const result = await apiFetch('../api/monitoring/poll/device/' + selectedDevice.id + '/' + suffix, { method: 'POST' });
+    const result = await apiFetch('monitoring/poll/device/' + selectedDevice.id + '/' + suffix, { method: 'POST' });
     btn.disabled = false; btn.textContent = '📡 Опросить устройство';
     if (result && result.results) {
         const protos = Object.keys(result.results);
@@ -500,11 +512,18 @@ async function pollFloor() {
     const btn = document.getElementById('btnPollFloor');
     const protocol = document.getElementById('pollProtocolSelect').value;
     const suffix = protocol ? '?protocol=' + protocol : '';
-    btn.disabled = true; btn.textContent = '📡 Опрос...';
-    await apiFetch('../api/monitoring/poll/floor/' + FLOOR_ID + '/' + suffix, { method: 'POST' });
-    btn.disabled = false; btn.textContent = '📡 Опросить этаж';
-    toast('Этаж опрошен', 'success');
-    await loadDeviceStatuses();
+    btn.disabled = true; btn.textContent = '📡 Опрос запущен...';
+    await apiFetch('monitoring/poll/floor/' + FLOOR_ID + '/' + suffix, { method: 'POST' });
+    toast('Опрос этажа запущен. Результаты обновятся через несколько секунд.');
+    // Poll runs in background thread — wait and refresh statuses
+    const refreshStatuses = async (attempts) => {
+        for (let i = 0; i < attempts; i++) {
+            await new Promise(r => setTimeout(r, 3000));
+            await loadDeviceStatuses();
+        }
+        btn.disabled = false; btn.textContent = '📡 Опросить этаж';
+    };
+    refreshStatuses(5); // refresh every 3s for 15s total
 }
 
 function updateDeviceStatusDot(entry, status) {
@@ -516,7 +535,7 @@ function updateDeviceStatusDot(entry, status) {
 }
 
 async function loadDeviceStatuses() {
-    const result = await apiFetch('../api/monitoring/status/floor/' + FLOOR_ID + '/');
+    const result = await apiFetch('monitoring/status/floor/' + FLOOR_ID + '/');
     if (!result || !result.devices) return;
     for (const entry of devices) {
         const status = result.devices[String(entry.id)];

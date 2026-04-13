@@ -22,3 +22,8 @@ def floor_view(request, floor_id):
 def device_list_view(request):
     """Страница списка устройств"""
     return render(request, 'mappy/device_list.html')
+
+
+def monitoring_history_view(request):
+    """Страница истории мониторинга"""
+    return render(request, 'mappy/monitoring_history.html')

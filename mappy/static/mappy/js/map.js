@@ -103,15 +103,14 @@ function zoomReset() { scale=1; panX=0; panY=0; applyTransform(); }
 // ==== Region status coloring on SVG ====
 async function loadRegionStatuses() {
     if (!allRegionsFromDB) return;
+    // Single request for all regions instead of 153 individual ones
+    const data = await apiFetch('monitoring/status/all-regions/');
+    if (!data) return;
     for (const region of allRegionsFromDB) {
-        try {
-            const resp = await fetch('/api/monitoring/status/region/' + region.id + '/', {
-                headers: {'Content-Type':'application/json'}
-            });
-            if (!resp.ok) continue;
-            const data = await resp.json();
-            colorRegionPaths(region.svg_id, data.status);
-        } catch(e) { /* skip */ }
+        const status = data[String(region.id)];
+        if (status !== undefined) {
+            colorRegionPaths(region.svg_id, status);
+        }
     }
 }
 
@@ -131,3 +130,40 @@ function colorRegionPaths(svgId, status) {
 }
 
 loadMap();
+
+// ==== Sidebar: problem devices ====
+document.getElementById('sidebarToggle').addEventListener('click', () => {
+    document.getElementById('mapSidebar').classList.toggle('collapsed');
+});
+
+async function loadProblemDevices() {
+    const list = document.getElementById('problemList');
+    list.innerHTML = '<div class="problem-loading">Загрузка...</div>';
+
+    const data = await apiFetch('monitoring/problem-devices/');
+    list.innerHTML = '';
+
+    if (!data || data.length === 0) {
+        list.innerHTML = '<div class="problem-empty">✓ Все устройства в норме</div>';
+        return;
+    }
+
+    data.forEach(d => {
+        const item = document.createElement('div');
+        item.className = 'problem-item';
+        const path = [d.region_name, d.city_name, d.office_name, 'Этаж ' + d.floor_number]
+            .filter(Boolean).join(' › ');
+        item.innerHTML = `
+            <div class="p-name">${esc(d.device_name)}</div>
+            <div class="p-ip">${esc(d.ip || '—')}</div>
+            <div class="p-path">${esc(path)}</div>
+        `;
+        item.addEventListener('click', () => {
+            if (d.floor_id) window.location.href = '/floor/' + d.floor_id + '/';
+        });
+        list.appendChild(item);
+    });
+}
+
+// Load after map
+loadProblemDevices();

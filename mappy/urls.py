@@ -3,7 +3,7 @@ from rest_framework.routers import DefaultRouter
 from .views import (
     RegionViewSet, CityViewSet, OfficeViewSet, FloorViewSet,
     DeviceTypeViewSet, DeviceViewSet, ConnectionViewSet,
-    builtin_icons, map_view, region_view, floor_view, device_list_view
+    builtin_icons, map_view, region_view, floor_view, device_list_view, monitoring_history_view
 )
 
 router = DefaultRouter()
@@ -21,6 +21,7 @@ urlpatterns = [
     path('region/<int:region_id>/', region_view, name='region'),
     path('floor/<int:floor_id>/', floor_view, name='floor'),
     path('devices/', device_list_view, name='device_list'),
+    path('monitoring/', monitoring_history_view, name='monitoring_history'),
 
     # API
     path('api/', include(router.urls)),

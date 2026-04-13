@@ -8,20 +8,33 @@
 {% endblock %}
 
 {% block content %}
-<div class="map-container">
-    <div class="map-header">
-        <h1>Интерактивная карта сети</h1>
+<div class="map-page-layout">
+    <div class="map-container" style="flex:1;min-width:0;">
+        <div class="map-header">
+            <h1>Интерактивная карта сети</h1>
+        </div>
+
+        <div class="russia-map-wrap" id="mapWrap" data-svg-url="{% static 'mappy/svg/russia_map.svg' %}">
+            <div class="region-info-box" id="regionInfo">
+                <div class="info-name" id="infoName"></div>
+                <div class="info-id" id="infoId"></div>
+            </div>
+            <div class="zoom-controls">
+                <button onclick="zoomIn()" title="Приблизить">+</button>
+                <button onclick="zoomOut()" title="Отдалить">−</button>
+                <button onclick="zoomReset()" title="Сброс">⌂</button>
+            </div>
+        </div>
     </div>
 
-    <div class="russia-map-wrap" id="mapWrap" data-svg-url="{% static 'mappy/svg/russia_map.svg' %}">
-        <div class="region-info-box" id="regionInfo">
-            <div class="info-name" id="infoName"></div>
-            <div class="info-id" id="infoId"></div>
-        </div>
-        <div class="zoom-controls">
-            <button onclick="zoomIn()" title="Приблизить">+</button>
-            <button onclick="zoomOut()" title="Отдалить">−</button>
-            <button onclick="zoomReset()" title="Сброс">⌂</button>
+    <div class="map-sidebar" id="mapSidebar">
+        <div class="sidebar-toggle" id="sidebarToggle" title="Свернуть/развернуть"></div>
+        <div class="sidebar-content" id="sidebarContent">
+            <h3>⚠ Проблемные устройства</h3>
+            <div class="sidebar-hint">Устройства с ошибками мониторинга</div>
+            <div id="problemList" class="problem-list">
+                <div class="problem-loading">Загрузка...</div>
+            </div>
         </div>
     </div>
 </div>

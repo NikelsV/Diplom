@@ -1,4 +1,5 @@
 let allDevices = [], deviceTypes = [], floors = [], offices = [];
+let deviceStatuses = {}; // {deviceId: true/false/null}
 
 // Lookup helpers
 function getTypeName(id) { return deviceTypes.find(t => t.id === id)?.name || '—'; }
@@ -16,6 +17,12 @@ function getOfficeLabel(floorId) {
     const o = getOffice(floorId);
     return o ? o.name : '—';
 }
+function getStatusHtml(deviceId) {
+    const s = deviceStatuses[String(deviceId)];
+    if (s === true) return '<span style="color:#4caf50;font-size:1.2em;" title="Доступен">●</span>';
+    if (s === false) return '<span style="color:#e53935;font-size:1.2em;" title="Недоступен">●</span>';
+    return '<span style="color:#bbb;font-size:1.2em;" title="Нет данных">●</span>';
+}
 
 async function loadAll() {
     [deviceTypes, floors, offices, allDevices] = await Promise.all([
@@ -28,6 +35,9 @@ async function loadAll() {
     floors = floors || [];
     offices = offices || [];
     allDevices = allDevices || [];
+
+    // Load statuses for all devices
+    await loadAllStatuses();
 
     // Filter selects
     const selType = document.getElementById('filterType');
@@ -56,6 +66,18 @@ async function loadAll() {
     renderDevices(allDevices);
 }
 
+async function loadAllStatuses() {
+    // Load status per floor (batch)
+    deviceStatuses = {};
+    const floorIds = [...new Set(allDevices.map(d => d.floor).filter(Boolean))];
+    for (const fid of floorIds) {
+        const result = await apiFetch('monitoring/status/floor/' + fid + '/');
+        if (result && result.devices) {
+            Object.assign(deviceStatuses, result.devices);
+        }
+    }
+}
+
 function renderDevices(devs) {
     const body = document.getElementById('deviceBody');
     const noData = document.getElementById('noData');
@@ -79,10 +101,10 @@ function renderDevices(devs) {
             <td>${esc(getOfficeLabel(d.floor))}</td>
             <td>${esc(d.responsible_person || '—')}</td>
             <td>${esc(d.contact_info || '—')}</td>
+            <td class="status-cell">${getStatusHtml(d.id)}</td>
             <td class="desc" title="${esc(d.description || '')}">${esc(d.description || '—')}</td>
             <td class="actions">
                 <button onclick="openEdit(${d.id})">✏️</button>
-                <button class="del" onclick="deleteDevice(${d.id},'${esc(d.name).replace(/'/g,"\\'")}')">🗑</button>
             </td>
         `;
         body.appendChild(tr);
@@ -107,7 +129,6 @@ function applyFilters() {
     }
     if (typeId) filtered = filtered.filter(d => d.device_type == typeId);
     if (officeId) {
-        // device.floor → floor.office === officeId
         const officeFloorIds = floors.filter(f => f.office == officeId).map(f => f.id);
         filtered = filtered.filter(d => officeFloorIds.includes(d.floor));
     }
@@ -157,14 +178,6 @@ async function saveEdit() {
         closeEditModal();
         toast('Обновлено', 'success');
     }
-}
-
-async function deleteDevice(id, name) {
-    if (!confirm('Удалить «' + name + '»? Связи будут удалены.')) return;
-    await apiFetch('devices/' + id + '/', { method: 'DELETE' });
-    allDevices = allDevices.filter(d => d.id !== id);
-    applyFilters();
-    toast('Удалено', 'success');
 }
 
 loadAll();

@@ -1,5 +1,5 @@
     .russia-map-wrap {
-        position: relative; width: 100%; overflow: hidden;
+        position: relative; width: 100%; overflow: hidden; flex: 1;
         border: 1px solid #ddd; border-radius: 8px; cursor: grab; background: #eef1f7;
     }
     .russia-map-wrap.grabbing { cursor: grabbing; }
@@ -144,3 +144,64 @@
 }
 
 /* Popup panels */
+
+/* ==== Map page layout with sidebar ==== */
+.map-page-layout {
+    display: flex; gap: 0; height: calc(100vh - 56px - 48px);
+    /* Break out of .content max-width */
+    margin: -24px;
+    max-width: none;
+}
+.map-page-layout > .map-container {
+    flex: 1; min-width: 0; margin: 0; border-radius: 0;
+    box-shadow: none; overflow: hidden;
+    display: flex; flex-direction: column;
+}
+
+/* ==== Sidebar ==== */
+.map-sidebar {
+    width: 320px; min-width: 320px; position: relative;
+    display: flex; flex-direction: column;
+    background: #fff; border-left: 1px solid #e0e0e0;
+    transition: margin-right 0.2s;
+}
+.map-sidebar.collapsed {
+    margin-right: -320px;
+}
+.sidebar-toggle {
+    position: absolute; left: -28px; top: 12px;
+    width: 28px; height: 36px; display: flex; align-items: center; justify-content: center;
+    background: #1a237e; color: #fff; border: none; border-radius: 6px 0 0 6px;
+    cursor: pointer; z-index: 10;
+}
+.sidebar-toggle:hover { background: #283593; }
+.sidebar-toggle::after { content: '▸'; font-size: .9rem; }
+.map-sidebar:not(.collapsed) .sidebar-toggle::after { content: '◂'; }
+
+.sidebar-content {
+    padding: 16px; padding-left: 32px; overflow-y: auto; flex: 1;
+}
+.sidebar-content h3 {
+    font-size: 1rem; color: #e53935; margin-bottom: 4px;
+}
+.sidebar-hint {
+    font-size: .75rem; color: #999; margin-bottom: 12px;
+}
+.problem-list { display: flex; flex-direction: column; gap: 8px; }
+.problem-loading { color: #999; font-size: .85rem; }
+.problem-empty { color: #4caf50; font-size: .85rem; font-weight: 500; }
+
+.problem-item {
+    background: #ffebee; border: 1px solid #ffcdd2; border-radius: 8px;
+    padding: 10px 12px; cursor: pointer; transition: background 0.15s;
+}
+.problem-item:hover { background: #ffcdd2; }
+.problem-item .p-name {
+    font-weight: 600; font-size: .9rem; color: #c62828;
+}
+.problem-item .p-ip {
+    font-size: .8rem; color: #e53935; margin-top: 2px;
+}
+.problem-item .p-path {
+    font-size: .75rem; color: #666; margin-top: 4px; line-height: 1.3;
+}

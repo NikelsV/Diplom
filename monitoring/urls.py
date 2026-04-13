@@ -18,4 +18,7 @@ urlpatterns = [
     path('status/device/<int:device_id>/', views.device_status_view),
     path('status/floor/<int:floor_id>/', views.floor_status_view),
     path('status/region/<int:region_id>/', views.region_status_view),
+    path('status/all-regions/', views.all_regions_status_view),
+    path('history/', views.history_list_view),
+    path('problem-devices/', views.problem_devices_view),
 ]

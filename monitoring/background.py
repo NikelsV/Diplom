@@ -32,7 +32,7 @@ def _poll_all():
         enabled=True, protocol__enabled=True
     ).values_list('device_id', flat=True).distinct()
 
-    devices = Device.objects.filter(id__in=device_ids)
+    devices = Device.objects.filter(id__in=device_ids, visible_on_map=True)
     total = devices.count()
 
     if total == 0:
