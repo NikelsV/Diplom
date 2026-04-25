@@ -4,13 +4,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}WebMap — Карта сети{% endblock %}</title>
+    <title>{% block title %}Карта сети{% endblock %}</title>
     <link rel="stylesheet" href="{% static 'mappy/css/base.css' %}">
     {% block extra_css %}{% endblock %}
 </head>
 <body>
     <nav class="navbar">
-        <a href="{% url 'map' %}" class="navbar-brand">🗺 WebMap</a>
+        <a href="{% url 'map' %}" class="navbar-brand">🗺 Карта сети</a>
         <div class="navbar-links">
             <a href="{% url 'map' %}">Карта</a>
             <a href="{% url 'device_list' %}">Устройства</a>

@@ -1,0 +1,60 @@
+# compose.yaml — описание двух сервисов для Podman / podman-compose.
+#
+# Запуск:
+#   podman-compose up -d --build
+# Остановка:
+#   podman-compose down
+# Полная очистка (с удалением volume базы данных):
+#   podman-compose down -v
+
+services:
+
+  db:
+    image: docker.io/library/postgres:16-alpine
+    container_name: webmap-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-webmap}
+      POSTGRES_USER: ${DB_USER:-webmap}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-webmap_pass}
+    volumes:
+      - webmap_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-webmap} -d ${DB_NAME:-webmap}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  web:
+    build:
+      context: .
+      dockerfile: Containerfile
+    image: localhost/webmap:latest
+    container_name: webmap-web
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-django-insecure-change-me-in-prod}
+      DJANGO_DEBUG: ${DJANGO_DEBUG:-True}
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1,0.0.0.0}
+      DJANGO_CSRF_TRUSTED_ORIGINS: ${DJANGO_CSRF_TRUSTED_ORIGINS:-http://localhost:8000,http://127.0.0.1:8000}
+      DB_ENGINE: postgresql
+      DB_NAME: ${DB_NAME:-webmap}
+      DB_USER: ${DB_USER:-webmap}
+      DB_PASSWORD: ${DB_PASSWORD:-webmap_pass}
+      DB_HOST: db
+      DB_PORT: "5432"
+    volumes:
+      - webmap_media:/app/media
+    ports:
+      - "8000:8000"
+    # NET_RAW позволяет системному ping использовать raw-сокеты,
+    # это работает в rootless Podman без проблем.
+    cap_add:
+      - NET_RAW
+
+volumes:
+  webmap_db_data:
+  webmap_media:

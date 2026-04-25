@@ -1,70 +1,87 @@
 {% extends "mappy/base.html" %}
 {% load static %}
 
-{% block title %}WebMap — Этаж{% endblock %}
+{% block title %}Карта сети — Этаж{% endblock %}
 
 {% block extra_css %}
 <link rel="stylesheet" href="{% static 'mappy/css/floor.css' %}">
 {% endblock %}
 
 {% block content %}
-<div class="map-container" style="padding:12px;">
-    <div class="map-header">
-        <h1 id="floorTitle">Этаж</h1>
-        <div class="breadcrumb" id="breadcrumb"></div>
-    </div>
-    <div class="floor-editor">
-        <div class="floor-left">
-            <div class="toolbar" id="toolbar">
-                <label class="upload-btn" title="Загрузить карту этажа">📁 Загрузить карту
-                    <input type="file" id="mapUpload" accept="image/*" style="display:none;">
-                </label>
-                <button id="btnAddDevice">➕ Устройство</button>
-                <button id="btnAddConnection">🔗 Связь</button>
-                <button id="btnDelete">🗑 Удалить</button>
-                <select id="pollProtocolSelect" style="font-size:.85rem;padding:4px 8px;border:1px solid #c5cae9;border-radius:6px;">
-                    <option value="">Все протоколы</option>
-                </select>
-                <button id="btnPollFloor" title="Опросить все устройства этажа">📡 Опросить этаж</button>
-                <span id="modeLabel" style="margin-left:auto;font-size:.85rem;color:#888;"></span>
-            </div>
-            <div class="floor-wrap" id="floorWrap" data-floor-id="{{ floor_id }}">
-                <div class="floor-inner" id="floorInner">
-                    <div id="konvaContainer"></div>
-                </div>
-                <div class="floor-zoom-controls">
-                    <button onclick="floorZoomIn()">+</button>
-                    <button onclick="floorZoomOut()">−</button>
-                    <button onclick="floorZoomReset()">⌂</button>
-                </div>
-                <div class="pan-hint">ПКМ — перемещение, колесо — масштаб</div>
-            </div>
+<div class="map-page-layout">
+    <div class="map-container" style="flex:1;min-width:0;">
+        <div class="map-header">
+            <h1 id="floorTitle">Этаж</h1>
+            <div class="breadcrumb" id="breadcrumb"></div>
         </div>
-        <div class="side-panel-wrap" id="sidePanel">
-            <div class="side-panel-spacer" id="sidePanelSpacer"></div>
-            <div class="side-panel-content">
-                <h3>Свойства устройства</h3>
-                <div class="field-group"><label>Тип устройства</label><select id="fDeviceType"></select></div>
-                <div class="field-group"><label>Название</label><input id="fName" type="text"></div>
-                <div class="field-group"><label>Модель</label><input id="fModel" type="text"></div>
-                <div class="field-group"><label>IP адрес</label><input id="fIP" type="text" placeholder="192.168.1.1"></div>
-                <div class="field-group"><label>MAC адрес</label><input id="fMAC" type="text" placeholder="AA:BB:CC:DD:EE:FF"></div>
-                <div class="field-group"><label>Описание</label><textarea id="fDesc"></textarea></div>
-                <div class="field-group"><label>Ответственное лицо</label><input id="fPerson" type="text"></div>
-                <div class="field-group"><label>Контактные данные</label><input id="fContact" type="text"></div>
-                <div class="field-group"><label>Масштаб иконки</label><input id="fIconScale" type="range" min="0.3" max="3" step="0.1" value="1.0"><span id="fIconScaleVal" style="font-size:.8rem;margin-left:6px;">1.0</span></div>
-                <div style="margin-top:8px;font-size:.78rem;color:#999;">Авто-сохранение</div>
 
-                <!-- Мониторинг -->
-                <hr style="margin:16px 0;border:none;border-top:1px solid #e0e0e0;">
-                <h3>Мониторинг</h3>
-                <div id="monitorSection">
-                    <div id="monitorConfigs"></div>
-                    <div style="margin-top:10px;">
-                        <select id="devicePollProtocol" style="width:100%;padding:6px;border:1px solid #ddd;border-radius:4px;font-size:.85rem;margin-bottom:6px;">
-                            <option value="">Все протоколы</option>
-                        </select>
-                        <button id="btnPollDevice" class="monitor-btn" onclick="pollSelectedDevice()">📡 Опросить устройство</button>
+        <div class="floor-toolbar">
+            <label class="upload-btn" title="Загрузить карту этажа">📁 Загрузить карту
+                <input type="file" id="mapUpload" accept="image/*" style="display:none;">
+            </label>
+            <button id="btnAddDevice">➕ Устройство</button>
+            <button id="btnAddConnection">🔗 Связь</button>
+            <button id="btnDelete">🗑 Убрать с карты</button>
+            <select id="pollProtocolSelect" style="font-size:.85rem;padding:4px 8px;border:1px solid #c5cae9;border-radius:6px;">
+                <option value="">Все протоколы</option>
+            </select>
+            <button id="btnPollFloor" title="Опросить все устройства этажа">📡 Опросить этаж</button>
+            <span id="modeLabel" style="margin-left:auto;font-size:.85rem;color:#888;"></span>
+        </div>
+
+        <div class="floor-wrap" id="floorWrap" data-floor-id="{{ floor_id }}">
+            <div class="floor-inner" id="floorInner">
+                <div id="konvaContainer"></div>
+            </div>
+            <div class="floor-zoom-controls">
+                <button onclick="floorZoomIn()">+</button>
+                <button onclick="floorZoomOut()">−</button>
+                <button onclick="floorZoomReset()">⌂</button>
+            </div>
+            <div class="pan-hint">ПКМ — перемещение, колесо — масштаб</div>
+        </div>
+    </div>
+
+    <div class="floor-sidebar" id="floorSidebar">
+        <div class="floor-sidebar-toggle" id="floorSidebarToggle"></div>
+        <div class="floor-sidebar-body">
+            <div class="floor-sidebar-tabs">
+                <button class="fs-tab active" data-tab="devlist" id="tabDevList">Устройства</button>
+                <button class="fs-tab" data-tab="props" id="tabProps">Свойства</button>
+            </div>
+
+            <div class="fs-tab-content active" id="tabContentDevList">
+                <div class="fs-search">
+                    <input type="text" id="sidebarSearch" placeholder="Поиск...">
+                </div>
+                <div id="sidebarDeviceList" class="fs-device-list"></div>
+            </div>
+
+            <div class="fs-tab-content" id="tabContentProps">
+                <div id="propsPlaceholder" style="color:#999;font-size:.85rem;padding:12px;">Выберите устройство</div>
+                <div id="propsContent" style="display:none;">
+                    <h3 id="propsTitle">Свойства</h3>
+                    <div class="field-group"><label>Тип устройства</label><select id="fDeviceType"></select></div>
+                    <div class="field-group"><label>Название</label><input id="fName" type="text"></div>
+                    <div class="field-group"><label>Модель</label><input id="fModel" type="text"></div>
+                    <div class="field-group"><label>IP адрес</label><input id="fIP" type="text" placeholder="192.168.1.1"></div>
+                    <div class="field-group"><label>MAC адрес</label><input id="fMAC" type="text" placeholder="AA:BB:CC:DD:EE:FF"></div>
+                    <div class="field-group"><label>Описание</label><textarea id="fDesc"></textarea></div>
+                    <div class="field-group"><label>Ответственное лицо</label><input id="fPerson" type="text"></div>
+                    <div class="field-group"><label>Контактные данные</label><input id="fContact" type="text"></div>
+                    <div class="field-group"><label>Масштаб иконки</label><input id="fIconScale" type="range" min="0.3" max="3" step="0.1" value="1.0"><span id="fIconScaleVal" style="font-size:.8rem;margin-left:6px;">1.0</span></div>
+                    <div style="margin-top:8px;font-size:.78rem;color:#999;">Авто-сохранение</div>
+
+                    <hr style="margin:16px 0;border:none;border-top:1px solid #e0e0e0;">
+                    <h3>Мониторинг</h3>
+                    <div id="monitorSection">
+                        <div id="monitorConfigs"></div>
+                        <div style="margin-top:10px;">
+                            <select id="devicePollProtocol" style="width:100%;padding:6px;border:1px solid #ddd;border-radius:4px;font-size:.85rem;margin-bottom:6px;">
+                                <option value="">Все протоколы</option>
+                            </select>
+                            <button id="btnPollDevice" class="monitor-btn" onclick="pollSelectedDevice()">📡 Опросить устройство</button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -73,7 +90,6 @@
 </div>
 
 {% include "mappy/includes/modal_device.html" %}
-
 <div class="toast-container" id="toasts"></div>
 {% endblock %}
 

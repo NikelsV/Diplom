@@ -116,7 +116,7 @@ class Connection(models.Model):
 
     device_a = models.ForeignKey(Device, on_delete=models.CASCADE, related_name='connections_from', verbose_name='Устройство A')
     device_b = models.ForeignKey(Device, on_delete=models.CASCADE, related_name='connections_to', verbose_name='Устройство B')
-    line_type = models.CharField(max_length=10, choices=LINE_TYPE_CHOICES, default=ARROW, verbose_name='Тип линии')
+    line_type = models.CharField(max_length=10, choices=LINE_TYPE_CHOICES, default=LINE, verbose_name='Тип линии')
     label = models.CharField(max_length=100, verbose_name='Подпись', blank=True)
     # Сегменты маршрута — список точек излома в формате JSON
     # Пример: [{"x": 100, "y": 200}, {"x": 100, "y": 350}, {"x": 400, "y": 350}]

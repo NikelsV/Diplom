@@ -17,7 +17,8 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
-from django.conf.urls.static import static
+from django.views.static import serve
+from django.urls import re_path
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -25,5 +26,13 @@ urlpatterns = [
     path('api/monitoring/', include('monitoring.urls')),
 ]
 
-# Раздача медиа-файлов в режиме разработки
-urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+# Раздача медиа-файлов (загруженные карты областей, планы этажей, иконки).
+# Используем django.views.static.serve напрямую, чтобы работало и при DEBUG=False
+# (стандартный django.conf.urls.static.static() работает только в DEBUG-режиме).
+urlpatterns += [
+    re_path(
+        r'^media/(?P<path>.*)$',
+        serve,
+        {'document_root': settings.MEDIA_ROOT},
+    ),
+]

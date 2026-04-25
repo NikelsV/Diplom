@@ -1,0 +1,20 @@
+# Не копируем в образ:
+**/__pycache__
+**/*.pyc
+**/*.pyo
+*.sqlite3
+db.sqlite3
+.git
+.gitignore
+.venv
+venv
+env
+*.log
+.idea
+.vscode
+*.swp
+.DS_Store
+.env
+.env.*
+staticfiles/
+# media/ оставляем — но в проде она монтируется через volume

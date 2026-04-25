@@ -105,10 +105,148 @@ function floorZoomOut() {
     applyFloorTransform();
 }
 
-function alignSidePanel() {
-    const tb = document.getElementById('toolbar');
-    const sp = document.getElementById('sidePanelSpacer');
-    if (tb && sp) sp.style.height = tb.offsetHeight + 'px';
+function initSidebar() {
+    // Toggle
+    document.getElementById('floorSidebarToggle').addEventListener('click', () => {
+        document.getElementById('floorSidebar').classList.toggle('collapsed');
+    });
+    // Tabs
+    document.querySelectorAll('.fs-tab').forEach(t => {
+        t.addEventListener('click', () => switchTab(t.dataset.tab));
+    });
+    // Search
+    document.getElementById('sidebarSearch').addEventListener('input', renderSidebarDeviceList);
+}
+
+let allFloorDevices = []; // ALL devices on this floor, including hidden
+
+async function loadAllFloorDevices() {
+    allFloorDevices = await apiFetch('devices/?floor=' + FLOOR_ID) || [];
+    renderSidebarDeviceList();
+}
+
+function renderSidebarDeviceList() {
+    const container = document.getElementById('sidebarDeviceList');
+    const q = document.getElementById('sidebarSearch').value.toLowerCase();
+    container.innerHTML = '';
+
+    let filtered = allFloorDevices;
+    if (q) {
+        filtered = filtered.filter(d =>
+            (d.name || '').toLowerCase().includes(q) ||
+            (d.ip_address || '').toLowerCase().includes(q)
+        );
+    }
+
+    if (!filtered.length) {
+        container.innerHTML = '<div style="color:#999;font-size:.85rem;padding:8px;">Нет устройств</div>';
+        return;
+    }
+
+    filtered.forEach(d => {
+        const onMap = d.visible_on_map !== false;
+        const item = document.createElement('div');
+        item.className = 'sidebar-dev-item' + (onMap ? '' : ' hidden-from-map');
+        item.dataset.deviceId = d.id;
+
+        // Status dot
+        const canvasEntry = devices.find(e => e.id === d.id);
+        let statusClass = '';
+        // Will be updated by updateSidebarStatuses()
+
+        item.innerHTML = `
+            <div class="sidebar-dev-status" data-sid="${d.id}"></div>
+            <div class="sidebar-dev-info">
+                <div class="sidebar-dev-name">${esc(d.name)}</div>
+                <div class="sidebar-dev-ip">${esc(d.ip_address || '—')}</div>
+            </div>
+            <span class="sidebar-dev-map-badge ${onMap ? 'on-map' : 'off-map'}">${onMap ? 'на карте' : 'скрыт'}</span>
+            ${!onMap ? '<button class="sidebar-restore-btn" data-restore-id="' + d.id + '">↩ На карту</button>' : ''}
+        `;
+
+        // Click → select device (open properties)
+        item.addEventListener('click', (e) => {
+            if (e.target.classList.contains('sidebar-restore-btn')) return;
+            const entry = devices.find(x => x.id === d.id);
+            if (entry) {
+                selectDevice(entry);
+            } else {
+                // Device hidden from map — show properties for hidden device
+                selectHiddenDevice(d);
+            }
+        });
+
+        // Restore button
+        const restoreBtn = item.querySelector('.sidebar-restore-btn');
+        if (restoreBtn) {
+            restoreBtn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                await restoreDeviceToMap(d.id);
+            });
+        }
+
+        container.appendChild(item);
+    });
+
+    updateSidebarStatuses();
+}
+
+function selectHiddenDevice(d) {
+    deselectDevice();
+    // Create a virtual entry for properties panel (no konvaGroup)
+    selectedDevice = { id: d.id, data: d, konvaGroup: null, label: null, statusDot: null };
+    document.getElementById('fDeviceType').value = d.device_type || '';
+    document.getElementById('fName').value = d.name || '';
+    document.getElementById('fModel').value = d.model || '';
+    document.getElementById('fIP').value = d.ip_address || '';
+    document.getElementById('fMAC').value = d.mac_address || '';
+    document.getElementById('fDesc').value = d.description || '';
+    document.getElementById('fPerson').value = d.responsible_person || '';
+    document.getElementById('fContact').value = d.contact_info || '';
+    document.getElementById('fIconScale').value = d.icon_scale || 1.0;
+    document.getElementById('fIconScaleVal').textContent = d.icon_scale || 1.0;
+    document.getElementById('propsPlaceholder').style.display = 'none';
+    document.getElementById('propsContent').style.display = 'block';
+    document.getElementById('propsTitle').textContent = (d.name || 'Устройство') + ' (скрыт)';
+    switchTab('props');
+    document.getElementById('floorSidebar').classList.remove('collapsed');
+    loadMonitorConfigs(selectedDevice);
+    highlightSidebarItem(d.id);
+}
+
+async function restoreDeviceToMap(deviceId) {
+    const result = await apiFetch('devices/' + deviceId + '/', {
+        method: 'PATCH', body: JSON.stringify({ visible_on_map: true, x: 100, y: 100 })
+    });
+    if (result) {
+        toast('Устройство возвращено на карту', 'success');
+        // Update local data
+        const idx = allFloorDevices.findIndex(d => d.id === deviceId);
+        if (idx >= 0) allFloorDevices[idx] = result;
+        // Add to canvas
+        const entry = await addDeviceToCanvas(result);
+        layer.draw();
+        renderSidebarDeviceList();
+    }
+}
+
+function highlightSidebarItem(deviceId) {
+    document.querySelectorAll('.sidebar-dev-item').forEach(item => {
+        item.classList.toggle('selected', item.dataset.deviceId == deviceId);
+    });
+}
+
+function updateSidebarStatuses() {
+    // Update status dots in sidebar from loaded device statuses
+    document.querySelectorAll('.sidebar-dev-status').forEach(dot => {
+        const id = dot.dataset.sid;
+        const entry = devices.find(e => e.id == id);
+        if (entry && entry.statusDot) {
+            const fill = entry.statusDot.fill();
+            if (fill === '#4caf50') dot.classList.add('ok');
+            else if (fill === '#e53935') dot.classList.add('fail');
+        }
+    });
 }
 
 // ==== Helpers ====
@@ -242,7 +380,9 @@ async function addDeviceToCanvas(dd) {
 function selectDevice(entry) {
     deselectDevice();
     selectedDevice = entry;
-    entry.konvaGroup.children[0].stroke('#3f51b5'); entry.konvaGroup.children[0].strokeWidth(3); layer.draw();
+    if (entry.konvaGroup) {
+        entry.konvaGroup.children[0].stroke('#3f51b5'); entry.konvaGroup.children[0].strokeWidth(3); layer.draw();
+    }
     const d = entry.data;
     document.getElementById('fDeviceType').value = d.device_type || '';
     document.getElementById('fName').value = d.name || '';
@@ -255,14 +395,28 @@ function selectDevice(entry) {
     const scaleSlider = document.getElementById('fIconScale');
     scaleSlider.value = d.icon_scale || 1.0;
     document.getElementById('fIconScaleVal').textContent = scaleSlider.value;
-    document.getElementById('sidePanel').classList.add('open');
-    alignSidePanel();
+    document.getElementById('propsPlaceholder').style.display = 'none';
+    document.getElementById('propsContent').style.display = 'block';
+    document.getElementById('propsTitle').textContent = d.name || 'Устройство';
+    switchTab('props');
+    // Open sidebar if collapsed
+    document.getElementById('floorSidebar').classList.remove('collapsed');
     loadMonitorConfigs(entry);
+    highlightSidebarItem(entry.id);
 }
 function deselectDevice() {
-    if (selectedDevice) { try { if (selectedDevice.konvaGroup.getStage()) { selectedDevice.konvaGroup.children[0].stroke(''); selectedDevice.konvaGroup.children[0].strokeWidth(0); layer.draw(); } } catch(e){} }
+    if (selectedDevice && selectedDevice.konvaGroup) {
+        try { if (selectedDevice.konvaGroup.getStage()) { selectedDevice.konvaGroup.children[0].stroke(''); selectedDevice.konvaGroup.children[0].strokeWidth(0); layer.draw(); } } catch(e){}
+    }
     selectedDevice = null;
-    document.getElementById('sidePanel').classList.remove('open');
+    highlightSidebarItem(null);
+}
+
+// ==== Sidebar tabs ====
+function switchTab(tabId) {
+    document.querySelectorAll('.fs-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tabId));
+    document.querySelectorAll('.fs-tab-content').forEach(c => c.classList.remove('active'));
+    document.getElementById(tabId === 'props' ? 'tabContentProps' : 'tabContentDevList').classList.add('active');
 }
 
 // ==== Auto-save ====
@@ -327,7 +481,7 @@ async function onConnectionClick(entry) {
     if(!connectionStart){connectionStart=entry;entry.konvaGroup.children[0].stroke('#ff9800');entry.konvaGroup.children[0].strokeWidth(3);layer.draw();document.getElementById('modeLabel').textContent='Выбрано: '+entry.data.name+'. Кликните на 2-е.';}
     else{
         if(connectionStart.id===entry.id){toast('Нельзя связать с собой');return;}
-        const r=await apiFetch('connections/',{method:'POST',body:JSON.stringify({device_a:connectionStart.id,device_b:entry.id,line_type:'arrow'})});
+        const r=await apiFetch('connections/',{method:'POST',body:JSON.stringify({device_a:connectionStart.id,device_b:entry.id,line_type:'line'})});
         if(r){addConnectionToCanvas(r);rebuildDeviceConnectionMap();connectionsLayer.draw();toast('Связь создана','success');}
         connectionStart.konvaGroup.children[0].stroke('');connectionStart.konvaGroup.children[0].strokeWidth(0);layer.draw();connectionStart=null;
         document.getElementById('modeLabel').textContent='Кликните на 1-е, затем на 2-е';
@@ -340,20 +494,24 @@ function closeAddDeviceModal(){document.getElementById('addDeviceModal').style.d
 async function confirmAddDevice(){
     const typeId=document.getElementById('newDeviceType').value,name=document.getElementById('newDeviceName').value||'Новое устройство';
     const r=await apiFetch('devices/',{method:'POST',body:JSON.stringify({floor:FLOOR_ID,device_type:typeId||null,name,x:imgW/2||500,y:imgH/2||500})});
-    if(r){await addDeviceToCanvas(r);layer.draw();toast('Устройство добавлено','success');}
+    if(r){await addDeviceToCanvas(r);layer.draw();allFloorDevices.push(r);renderSidebarDeviceList();toast('Устройство добавлено','success');}
     closeAddDeviceModal();
 }
 async function deleteSelected(){
     if(!selectedDevice){toast('Выберите устройство');return;}
+    if(!selectedDevice.konvaGroup){toast('Устройство не на карте');return;}
     if(!confirm('Убрать «'+selectedDevice.data.name+'» с карты?'))return;
     const id=selectedDevice.id,group=selectedDevice.konvaGroup;
-    selectedDevice=null;document.getElementById('sidePanel').classList.remove('open');
-    // Hide from map, don't delete from DB
+    selectedDevice=null;switchTab('devlist');
     await apiFetch('devices/'+id+'/',{method:'PATCH',body:JSON.stringify({visible_on_map:false})});
     connections=connections.filter(c=>{if(c.data.device_a===id||c.data.device_b===id){c.konvaLine.destroy();c.waypointCircles.forEach(w=>w.destroy());return false;}return true;});
     rebuildDeviceConnectionMap();
     group.destroy();devices=devices.filter(d=>d.id!==id);
     layer.draw();connectionsLayer.draw();toast('Устройство скрыто с карты','success');
+    // Update sidebar
+    const idx = allFloorDevices.findIndex(d => d.id === id);
+    if (idx >= 0) allFloorDevices[idx].visible_on_map = false;
+    renderSidebarDeviceList();
 }
 
 // ==== Upload map ====
@@ -555,6 +713,7 @@ async function loadDeviceStatuses() {
     await loadDeviceStatuses();
     setupAutoSave();
     setupMapUpload();
-    alignSidePanel();
-    window.addEventListener('resize',alignSidePanel);
+    initSidebar();
+    await loadAllFloorDevices();
+    renderSidebarDeviceList();
 })();

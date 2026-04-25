@@ -40,23 +40,32 @@ def poll_device(device, protocol_id=None):
 def _update_history(device, protocol, success, details):
     """
     Обновить историю: ищет последний период по (device, protocol).
-    Продлевает если статус тот же, создаёт новый если изменился.
+    Продлевает если статус тот же И между сканированиями не было длинной паузы.
+    Создаёт новый если статус изменился ИЛИ пауза > poll_interval * 1.5.
     """
+    from .models import GlobalMonitorSettings
     now = timezone.now()
+
+    # Определяем максимально допустимый разрыв между сканированиями
+    max_gap_seconds = 300 * 1.5  # default: 450 сек
+    try:
+        gs = protocol.global_settings
+        max_gap_seconds = gs.poll_interval * 1.5
+    except GlobalMonitorSettings.DoesNotExist:
+        pass
+
     last = MonitoringHistory.objects.filter(
         device=device, protocol=protocol
     ).order_by('-started_at').first()
 
     if last is None:
+        # Первый опрос
         MonitoringHistory.objects.create(
             device=device, protocol=protocol,
             status=success, details=details
         )
-    elif last.status == success:
-        last.ended_at = now
-        last.details = details
-        last.save(update_fields=['ended_at', 'details'])
-    else:
+    elif last.status != success:
+        # Статус изменился — закрыть старый, открыть новый
         if last.ended_at is None:
             last.ended_at = now
             last.save(update_fields=['ended_at'])
@@ -64,6 +73,24 @@ def _update_history(device, protocol, success, details):
             device=device, protocol=protocol,
             status=success, details=details
         )
+    else:
+        # Статус тот же — проверяем разрыв по времени
+        last_time = last.ended_at or last.started_at
+        gap = (now - last_time).total_seconds()
+        if gap > max_gap_seconds:
+            # Слишком большой разрыв — закрыть старый, создать новый
+            if last.ended_at is None:
+                last.ended_at = last_time
+                last.save(update_fields=['ended_at'])
+            MonitoringHistory.objects.create(
+                device=device, protocol=protocol,
+                status=success, details=details
+            )
+        else:
+            # Продлить текущий период
+            last.ended_at = now
+            last.details = details
+            last.save(update_fields=['ended_at', 'details'])
 
 
 def get_device_status(device):
