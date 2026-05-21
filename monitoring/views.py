@@ -1,5 +1,8 @@
+import threading
+
 from rest_framework import viewsets
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
 
@@ -17,12 +20,14 @@ class MonitorProtocolViewSet(viewsets.ModelViewSet):
     """Протоколы мониторинга (зарегистрированные в БД)."""
     queryset = MonitorProtocol.objects.filter(enabled=True)
     serializer_class = MonitorProtocolSerializer
+    permission_classes = [IsAuthenticated]
 
 
 class GlobalMonitorSettingsViewSet(viewsets.ModelViewSet):
     """Глобальные настройки мониторинга по протоколам."""
     queryset = GlobalMonitorSettings.objects.all()
     serializer_class = GlobalMonitorSettingsSerializer
+    permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         qs = GlobalMonitorSettings.objects.all()
@@ -36,6 +41,7 @@ class DeviceMonitorConfigViewSet(viewsets.ModelViewSet):
     """Настройки мониторинга устройств."""
     queryset = DeviceMonitorConfig.objects.all()
     serializer_class = DeviceMonitorConfigSerializer
+    permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         qs = DeviceMonitorConfig.objects.all()
@@ -46,6 +52,7 @@ class DeviceMonitorConfigViewSet(viewsets.ModelViewSet):
 
 
 @api_view(['GET'])
+@permission_classes([IsAuthenticated])
 def available_protocols(request):
     """Список активных протоколов с param_schema и default_params."""
     protocols = MonitorProtocol.objects.filter(enabled=True)
@@ -75,6 +82,7 @@ def _get_protocol_filter(request):
 
 
 @api_view(['POST'])
+@permission_classes([IsAuthenticated])
 def poll_device_view(request, device_id):
     """Синхронный опрос одного устройства — результат сразу."""
     device = get_object_or_404(Device, pk=device_id)
@@ -89,8 +97,6 @@ def poll_device_view(request, device_id):
     })
 
 
-import threading
-
 def _run_in_thread(fn, *args):
     """Запустить функцию в отдельном потоке."""
     t = threading.Thread(target=fn, args=args, daemon=True)
@@ -98,6 +104,7 @@ def _run_in_thread(fn, *args):
 
 
 @api_view(['POST'])
+@permission_classes([IsAuthenticated])
 def poll_floor_view(request, floor_id):
     floor = get_object_or_404(Floor, pk=floor_id)
     protocol_id = _get_protocol_filter(request)
@@ -106,6 +113,7 @@ def poll_floor_view(request, floor_id):
 
 
 @api_view(['POST'])
+@permission_classes([IsAuthenticated])
 def poll_office_view(request, office_id):
     office = get_object_or_404(Office, pk=office_id)
     protocol_id = _get_protocol_filter(request)
@@ -114,6 +122,7 @@ def poll_office_view(request, office_id):
 
 
 @api_view(['POST'])
+@permission_classes([IsAuthenticated])
 def poll_city_view(request, city_id):
     city = get_object_or_404(City, pk=city_id)
     protocol_id = _get_protocol_filter(request)
@@ -122,6 +131,7 @@ def poll_city_view(request, city_id):
 
 
 @api_view(['POST'])
+@permission_classes([IsAuthenticated])
 def poll_region_view(request, region_id):
     region = get_object_or_404(Region, pk=region_id)
     protocol_id = _get_protocol_filter(request)
@@ -130,12 +140,14 @@ def poll_region_view(request, region_id):
 
 
 @api_view(['GET'])
+@permission_classes([IsAuthenticated])
 def device_status_view(request, device_id):
     device = get_object_or_404(Device, pk=device_id)
     return Response({'device_id': device.id, 'status': services.get_device_status(device)})
 
 
 @api_view(['GET'])
+@permission_classes([IsAuthenticated])
 def floor_status_view(request, floor_id):
     floor = get_object_or_404(Floor, pk=floor_id)
     devices = Device.objects.filter(floor=floor, visible_on_map=True)
@@ -150,6 +162,7 @@ def floor_status_view(request, floor_id):
 
 
 @api_view(['GET'])
+@permission_classes([IsAuthenticated])
 def region_status_view(request, region_id):
     region = get_object_or_404(Region, pk=region_id)
     cities_data = []
@@ -178,7 +191,9 @@ def region_status_view(request, region_id):
         'cities': cities_data,
     })
 
+
 @api_view(['GET'])
+@permission_classes([IsAuthenticated])
 def all_regions_status_view(request):
     """Статусы ВСЕХ регионов одним запросом (для карты России)."""
     data = {}
@@ -190,6 +205,7 @@ def all_regions_status_view(request):
 
 
 @api_view(['GET'])
+@permission_classes([IsAuthenticated])
 def history_list_view(request):
     """Список записей истории мониторинга с фильтрацией и сортировкой."""
     qs = MonitoringHistory.objects.select_related('device', 'protocol').all()
@@ -232,15 +248,14 @@ def history_list_view(request):
 
 
 @api_view(['GET'])
+@permission_classes([IsAuthenticated])
 def problem_devices_view(request):
     """Устройства с проблемами (последний статус = False) с полной иерархией."""
-    from .models import DeviceMonitorConfig, MonitoringHistory
-    
     # Find devices that have monitoring enabled
     device_ids = DeviceMonitorConfig.objects.filter(
         enabled=True
     ).values_list('device_id', flat=True).distinct()
-    
+
     problems = []
     for device in Device.objects.filter(id__in=device_ids, visible_on_map=True).select_related(
         'floor__office__city__region'

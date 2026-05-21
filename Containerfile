@@ -50,17 +50,16 @@ RUN chmod +x /app/entrypoint.sh
 
 USER app
 
-# Собираем статику на этапе сборки образа: она "вшивается" в слой и доступна
-# сразу после старта контейнера. WhiteNoise отдаёт её через WSGI.
-# DJANGO_SECRET_KEY нужен только формально — collectstatic его не использует.
-RUN DJANGO_SECRET_KEY=build-time-dummy DB_ENGINE=sqlite \
-    python manage.py collectstatic --noinput --clear
+# Статика собирается в entrypoint при старте контейнера, а не на этапе сборки.
+# Это нужно потому, что /app/staticfiles в продакшене монтируется как volume,
+# общий с nginx-контейнером, и содержимое volume при первом запуске должно
+# быть наполнено.
 
 EXPOSE 8000
 
 # tini — PID 1, корректно прокидывает сигналы дочерним процессам.
 ENTRYPOINT ["/usr/bin/tini", "--", "/app/entrypoint.sh"]
 
-# По умолчанию — gunicorn. Можно переопределить, например на runserver для отладки:
-#   podman run ... webmap python manage.py runserver 0.0.0.0:8000
+# По умолчанию — gunicorn. В compose.yaml для разных сервисов команда
+# переопределяется (poller-контейнер запускает poll_devices --loop).
 CMD ["gunicorn", "webmap.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "3", "--access-logfile", "-"]

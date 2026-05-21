@@ -1,0 +1,97 @@
+# Корневые файлы конфигурации
+manage.py
+requirements.txt
+Containerfile
+compose.yaml
+entrypoint.sh
+nginx/nginx.conf
+
+# Пакет webmap (конфигурация Django-проекта)
+webmap/__init__.py
+webmap/asgi.py
+webmap/wsgi.py
+webmap/urls.py
+webmap/settings.py
+
+# Приложение mappy
+mappy/__init__.py
+mappy/admin.py
+mappy/apps.py
+mappy/models.py
+mappy/serializers.py
+mappy/urls.py
+mappy/views/__init__.py
+mappy/views/api.py
+mappy/views/pages.py
+
+# Команды управления mappy
+mappy/management/__init__.py
+mappy/management/commands/__init__.py
+mappy/management/commands/merge_regions.py
+
+# Миграции mappy
+mappy/migrations/__init__.py
+mappy/migrations/0001_initial.py
+mappy/migrations/0002_connection_waypoints_devicetype_builtin_icon_and_more.py
+mappy/migrations/0003_create_regions.py
+mappy/migrations/0004_region_map_image.py
+mappy/migrations/0005_device_visible_icon_scale.py
+mappy/migrations/0006_connection_line_default.py
+
+# Шаблоны mappy
+mappy/templates/mappy/base.html
+mappy/templates/mappy/map.html
+mappy/templates/mappy/region.html
+mappy/templates/mappy/floor.html
+mappy/templates/mappy/device_list.html
+mappy/templates/mappy/monitoring_history.html
+mappy/templates/mappy/includes/modal_city.html
+mappy/templates/mappy/includes/modal_office.html
+mappy/templates/mappy/includes/modal_floor.html
+mappy/templates/mappy/includes/modal_device.html
+mappy/templates/mappy/includes/modal_edit_device.html
+mappy/templates/registration/login.html
+
+# JavaScript mappy
+mappy/static/mappy/js/common.js
+mappy/static/mappy/js/map.js
+mappy/static/mappy/js/region.js
+mappy/static/mappy/js/floor.js
+mappy/static/mappy/js/device_list.js
+mappy/static/mappy/js/monitoring_history.js
+
+# CSS mappy
+mappy/static/mappy/css/base.css
+mappy/static/mappy/css/map.css
+mappy/static/mappy/css/region.css
+mappy/static/mappy/css/floor.css
+mappy/static/mappy/css/device_list.css
+mappy/static/mappy/css/monitoring.css
+
+# Приложение monitoring
+monitoring/__init__.py
+monitoring/admin.py
+monitoring/apps.py
+monitoring/models.py
+monitoring/serializers.py
+monitoring/urls.py
+monitoring/views.py
+monitoring/services.py
+monitoring/background.py
+
+# Поллеры
+monitoring/pollers/__init__.py
+monitoring/pollers/base.py
+monitoring/pollers/icmp.py
+monitoring/pollers/snmp_v2c.py
+
+# Команды управления monitoring
+monitoring/management/__init__.py
+monitoring/management/commands/__init__.py
+monitoring/management/commands/poll_devices.py
+
+# Миграции monitoring
+monitoring/migrations/__init__.py
+monitoring/migrations/0001_initial.py
+monitoring/migrations/0002_history_set_null.py
+monitoring/migrations/0003_seed_snmp.py

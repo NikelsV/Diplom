@@ -1,5 +1,13 @@
 """
-Фоновый мониторинг. Запускается автоматически при старте Django.
+Фоновый мониторинг. Запускается при старте Django, если задана переменная
+окружения ENABLE_BACKGROUND_POLLER=true (см. monitoring/apps.py).
+
+В эксплуатационной конфигурации эта переменная не задаётся, и за фоновый
+опрос отвечает отдельный сервис, запускающий ту же логику через CLI-команду
+manage.py poll_devices --loop (см. compose.yaml, сервис poller).
+
+Цикл опроса – единственная обёртка над сервисной функцией poll_all_active_devices:
+бесконечный цикл, между итерациями ожидание на основании настроек протоколов.
 """
 
 import time
@@ -11,47 +19,36 @@ DEFAULT_INTERVAL = 300
 
 
 def start_background_polling():
+    """Бесконечный цикл фонового опроса. Точка входа фонового потока."""
     logger.info('Фоновый мониторинг запущен')
-    time.sleep(10)  # подождать пока БД готова
+    time.sleep(10)  # подождать пока БД будет готова после старта контейнеров
 
     while True:
         try:
-            interval = _poll_all()
+            interval = _run_iteration()
         except Exception as e:
-            logger.error('Ошибка фонового мониторинга: %s', e)
+            logger.exception('Ошибка фонового мониторинга: %s', e)
             interval = DEFAULT_INTERVAL
         time.sleep(interval)
 
 
-def _poll_all():
-    from .models import DeviceMonitorConfig, GlobalMonitorSettings
-    from .services import poll_device
-    from mappy.models import Device
+def _run_iteration():
+    """Одна итерация опроса. Возвращает интервал до следующей итерации."""
+    # Импорты внутри функции – чтобы модуль можно было импортировать до
+    # полной готовности Django (например, на этапе AppConfig.ready).
+    from .services import poll_all_active_devices
+    from .models import GlobalMonitorSettings
 
-    device_ids = DeviceMonitorConfig.objects.filter(
-        enabled=True, protocol__enabled=True
-    ).values_list('device_id', flat=True).distinct()
-
-    devices = Device.objects.filter(id__in=device_ids, visible_on_map=True)
-    total = devices.count()
+    total, ok, fail, _ = poll_all_active_devices()
 
     if total == 0:
         return DEFAULT_INTERVAL
 
-    logger.info('Фоновый опрос: %d устройств', total)
-    ok = fail = 0
+    logger.info('Опрос завершён: %d устройств, %d OK, %d FAIL', total, ok, fail)
 
-    for device in devices:
-        results = poll_device(device)
-        for proto, result in results.items():
-            if result.success:
-                ok += 1
-            else:
-                fail += 1
-
-    logger.info('Опрос завершён: %d OK, %d FAIL', ok, fail)
-
-    # Минимальный интервал из глобальных настроек
+    # Интервал до следующей итерации – минимум из глобальных настроек
+    # активных протоколов; если ничего не задано, используется значение
+    # по умолчанию.
     intervals = GlobalMonitorSettings.objects.filter(
         auto_poll_enabled=True
     ).values_list('poll_interval', flat=True)

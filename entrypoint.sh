@@ -1,6 +1,12 @@
 #!/bin/sh
 # Скрипт запуска приложения внутри контейнера.
-# Ждёт PostgreSQL, применяет миграции, собирает статику, запускает основной процесс.
+# Используется тремя контейнерами:
+#   - web    — запускает gunicorn (см. CMD в Containerfile)
+#   - poller — запускает manage.py poll_devices --loop (см. compose.yaml)
+# Логика инициализации (ожидание БД, миграции, статика) определяется
+# переменными окружения, выставляемыми в compose.yaml:
+#   - SKIP_MIGRATIONS=true   — не делать миграции (для poller-контейнера)
+#   - SKIP_COLLECTSTATIC=true — не собирать статику (для poller-контейнера)
 
 set -e
 
@@ -25,13 +31,21 @@ sys.exit(1)
 PY
 fi
 
-# Применяем миграции (включая data-миграции: 153 региона, SNMP-протокол).
-echo "Применение миграций..."
-python manage.py migrate --noinput
+# Миграции применяет только основной web-контейнер.
+# Это исключает гонки, когда несколько контейнеров одновременно пытаются
+# мигрировать схему БД.
+if [ "${SKIP_MIGRATIONS}" != "true" ]; then
+    echo "Применение миграций..."
+    python manage.py migrate --noinput
+fi
 
-# RUN_MAIN=true нужен, чтобы фоновый поток мониторинга стартовал
-# (см. monitoring/apps.py: проверка os.environ.get('RUN_MAIN') != 'true').
-export RUN_MAIN=true
+# Сборка статики тоже только в web-контейнере. В poller статика не нужна.
+# DJANGO_SECRET_KEY используется реальный (а не build-time dummy), но
+# collectstatic его не использует — переменная нужна формально.
+if [ "${SKIP_COLLECTSTATIC}" != "true" ]; then
+    echo "Сборка статики в /app/staticfiles..."
+    python manage.py collectstatic --noinput --clear
+fi
 
 echo "Запуск: $@"
 exec "$@"

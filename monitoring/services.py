@@ -161,6 +161,49 @@ def get_region_status(region):
     return True if has_any else None
 
 
+def poll_all_active_devices():
+    """
+    Опросить все устройства, для которых настроен хотя бы один активный
+    мониторинг по активному протоколу.
+
+    Это единая точка для запуска полного цикла опроса. Используется
+    и фоновым потоком (monitoring.background), и CLI-командой
+    (manage.py poll_devices).
+
+    Возвращает кортеж (total, ok_count, fail_count, per_device), где:
+      - total      — количество опрошенных устройств
+      - ok_count   — количество успешных проверок (по всем протоколам в сумме)
+      - fail_count — количество неуспешных
+      - per_device — список dict-ов вида
+            {'device': <Device>, 'results': {poller_id: PollResult}}
+        для последующего форматирования вызывающей стороной (например,
+        построчного вывода в stdout CLI-команды).
+    """
+    from mappy.models import Device
+
+    device_ids = DeviceMonitorConfig.objects.filter(
+        enabled=True, protocol__enabled=True
+    ).values_list('device_id', flat=True).distinct()
+
+    devices = Device.objects.filter(id__in=device_ids, visible_on_map=True)
+    total = devices.count()
+
+    ok_count = 0
+    fail_count = 0
+    per_device = []
+
+    for device in devices:
+        results = poll_device(device)
+        per_device.append({'device': device, 'results': results})
+        for result in results.values():
+            if result.success:
+                ok_count += 1
+            else:
+                fail_count += 1
+
+    return total, ok_count, fail_count, per_device
+
+
 def poll_floor(floor, protocol_id=None):
     from mappy.models import Device
     results = {}

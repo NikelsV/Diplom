@@ -17,6 +17,15 @@
             <a href="{% url 'monitoring_history' %}">Мониторинг</a>
             <a href="/admin/">Админ</a>
         </div>
+        {% if user.is_authenticated %}
+        <div class="navbar-user">
+            <span class="navbar-user-name">{{ user.get_username }}</span>
+            <form method="post" action="{% url 'logout' %}" class="navbar-logout-form">
+                {% csrf_token %}
+                <button type="submit" class="navbar-logout-btn" title="Выйти из системы">Выйти</button>
+            </form>
+        </div>
+        {% endif %}
     </nav>
     <main class="content">
         {% block content %}{% endblock %}

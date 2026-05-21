@@ -29,9 +29,14 @@ SECRET_KEY = os.environ.get(
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get('DJANGO_DEBUG', 'True').lower() in ('true', '1', 'yes')
 
-ALLOWED_HOSTS = [h.strip() for h in os.environ.get(
-    'DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1,0.0.0.0,*'
-).split(',') if h.strip()]
+ALLOWED_HOSTS = [
+    h.strip()
+    for h in os.environ.get(
+        'DJANGO_ALLOWED_HOSTS',
+        'web,localhost,127.0.0.1,0.0.0.0,*'
+    ).split(',')
+    if h.strip()
+]
 
 CSRF_TRUSTED_ORIGINS = [o.strip() for o in os.environ.get(
     'DJANGO_CSRF_TRUSTED_ORIGINS', 'http://localhost:8000,http://127.0.0.1:8000'
@@ -169,3 +174,38 @@ MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 CORS_ALLOW_ALL_ORIGINS = True  # для разработки
+
+
+# ============================================================================
+# Аутентификация
+# ============================================================================
+
+# URL страницы входа: куда перенаправляется неаутентифицированный пользователь
+# при попытке открыть страницу, защищённую @login_required.
+LOGIN_URL = 'login'
+
+# Куда перенаправляется пользователь после успешного входа, если в запросе
+# не было параметра ?next=...
+LOGIN_REDIRECT_URL = 'map'
+
+# Куда перенаправляется пользователь после выхода.
+LOGOUT_REDIRECT_URL = 'login'
+
+
+# ============================================================================
+# Django REST Framework: глобальные политики аутентификации и доступа
+# ============================================================================
+# По умолчанию все API-эндпоинты требуют аутентификации.
+# Это страховка: даже если в конкретном ViewSet забыли проставить
+# permission_classes, доступ всё равно будет закрыт.
+# SessionAuthentication работает через сессионные куки Django — это то же,
+# что и аутентификация HTML-страниц. Никаких токенов настраивать не нужно.
+
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.SessionAuthentication',
+    ],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',
+    ],
+}

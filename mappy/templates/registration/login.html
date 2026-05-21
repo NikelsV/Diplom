@@ -1,0 +1,88 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Карта сети — Вход</title>
+    <link rel="stylesheet" href="{% static 'mappy/css/base.css' %}">
+    <style>
+        body { background: #f5f6f8; }
+        .login-wrap {
+            max-width: 380px;
+            margin: 80px auto;
+            padding: 28px 32px 32px;
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 18px rgba(0,0,0,0.08);
+        }
+        .login-wrap h1 {
+            margin: 0 0 22px;
+            font-size: 22px;
+            text-align: center;
+        }
+        .login-wrap label {
+            display: block;
+            margin: 12px 0 4px;
+            font-size: 13px;
+            color: #555;
+        }
+        .login-wrap input[type=text],
+        .login-wrap input[type=password] {
+            width: 100%;
+            padding: 9px 11px;
+            border: 1px solid #c8ccd1;
+            border-radius: 4px;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+        .login-wrap button {
+            width: 100%;
+            margin-top: 22px;
+            padding: 10px;
+            background: #3a4a6a;
+            color: #fff;
+            border: 0;
+            border-radius: 4px;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        .login-wrap button:hover { background: #2c3a55; }
+        .login-error {
+            background: #fdecea;
+            color: #8a2a23;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 13px;
+            margin-bottom: 12px;
+        }
+        .login-error ul { margin: 0; padding-left: 18px; }
+    </style>
+</head>
+<body>
+    <div class="login-wrap">
+        <h1>🗺 Карта сети</h1>
+
+        {% if form.errors %}
+        <div class="login-error">
+            Неверное имя пользователя или пароль.
+        </div>
+        {% endif %}
+
+        <form method="post" action="{% url 'login' %}">
+            {% csrf_token %}
+            <label for="id_username">Имя пользователя</label>
+            <input type="text" name="username" id="id_username" autofocus required>
+
+            <label for="id_password">Пароль</label>
+            <input type="password" name="password" id="id_password" required>
+
+            <button type="submit">Войти</button>
+
+            {% if next %}
+            <input type="hidden" name="next" value="{{ next }}">
+            {% endif %}
+        </form>
+    </div>
+</body>
+</html>

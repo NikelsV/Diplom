@@ -34,6 +34,33 @@ body {
 }
 .navbar-links a:hover { color: #fff; }
 
+/* Блок пользователя справа */
+.navbar-user {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+.navbar-user-name {
+    color: #bbdefb;
+    font-size: .9rem;
+}
+.navbar-logout-form { margin: 0; }
+.navbar-logout-btn {
+    background: transparent;
+    border: 1px solid #5c6bc0;
+    color: #bbdefb;
+    padding: 5px 12px;
+    border-radius: 4px;
+    font-size: .85rem;
+    cursor: pointer;
+    transition: all .2s;
+}
+.navbar-logout-btn:hover {
+    background: #3949ab;
+    color: #fff;
+}
+
 /* === CONTENT === */
 .content {
     max-width: 1400px;

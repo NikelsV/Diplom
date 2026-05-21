@@ -1,4 +1,10 @@
-# compose.yaml — описание двух сервисов для Podman / podman-compose.
+# compose.yaml — описание сервисов для Podman / podman-compose.
+#
+# Сервисы:
+#   db     — PostgreSQL (хранилище данных)
+#   web    — Django + gunicorn (обработка HTTP-запросов от пользователей)
+#   poller — Django manage.py poll_devices --loop (фоновый опрос устройств)
+#   nginx  — веб-сервер впереди gunicorn (раздаёт статику/медиа, проксирует API)
 #
 # Запуск:
 #   podman-compose up -d --build
@@ -9,10 +15,15 @@
 
 services:
 
+  # ============================================================================
+  # PostgreSQL
+  # ============================================================================
   db:
     image: docker.io/library/postgres:16-alpine
     container_name: webmap-db
     restart: unless-stopped
+    networks:
+      - webmap_net
     environment:
       POSTGRES_DB: ${DB_NAME:-webmap}
       POSTGRES_USER: ${DB_USER:-webmap}
@@ -25,13 +36,20 @@ services:
       timeout: 3s
       retries: 10
 
+  # ============================================================================
+  # Django + gunicorn (обработка HTTP-запросов)
+  # ============================================================================
+  # Здесь применяются миграции и собирается статика при первом запуске.
+  # Фоновый опрос отключён — за него отвечает отдельный сервис poller.
   web:
     build:
       context: .
       dockerfile: Containerfile
     image: localhost/webmap:latest
-    container_name: webmap-web
+    container_name: web
     restart: unless-stopped
+    networks:
+      - webmap_net
     depends_on:
       db:
         condition: service_healthy
@@ -46,15 +64,97 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:-webmap_pass}
       DB_HOST: db
       DB_PORT: "5432"
+      # Включает режим X-Accel-Redirect: Django делегирует отдачу медиа nginx.
+      USE_XACCEL_REDIRECT: "true"
+      # Явно НЕ включаем фоновый поток: за фоновый опрос отвечает контейнер poller.
+      # ENABLE_BACKGROUND_POLLER не задано → поток не стартует.
     volumes:
       - webmap_media:/app/media
-    ports:
-      - "8000:8000"
-    # NET_RAW позволяет системному ping использовать raw-сокеты,
-    # это работает в rootless Podman без проблем.
+      - webmap_static:/app/staticfiles
+    expose:
+      - "8000"
+    # Доступ к web снаружи закрыт — он доступен только через nginx.
+    # Если нужен прямой доступ для отладки, раскомментируйте ports.
+    # ports:
+    #   - "8000:8000"
+
+  # ============================================================================
+  # Фоновый опрос устройств
+  # ============================================================================
+  # Использует тот же образ, что и web, но запускает CLI-команду в цикле
+  # вместо gunicorn. Это один процесс, что исключает дублирование опроса
+  # (как было бы в случае запуска потока в каждом из gunicorn-воркеров).
+  poller:
+    image: localhost/webmap:latest
+    container_name: webmap-poller
+    restart: unless-stopped
+    networks:
+      - webmap_net
+    depends_on:
+      db:
+        condition: service_healthy
+      # Зависим от web, чтобы он успел применить миграции до того,
+      # как poller начнёт работу с БД.
+      web:
+        condition: service_started
+    environment:
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-django-insecure-change-me-in-prod}
+      DJANGO_DEBUG: ${DJANGO_DEBUG:-False}
+      DB_ENGINE: postgresql
+      DB_NAME: ${DB_NAME:-webmap}
+      DB_USER: ${DB_USER:-webmap}
+      DB_PASSWORD: ${DB_PASSWORD:-webmap_pass}
+      DB_HOST: db
+      DB_PORT: "5432"
+      # poller не делает миграций (это работа web) и не собирает статику.
+      SKIP_MIGRATIONS: "true"
+      SKIP_COLLECTSTATIC: "true"
+    # NET_RAW нужен для системного ping (ICMP-поллер).
     cap_add:
       - NET_RAW
+    # Команда: запускаем CLI команду в цикле с интервалом по умолчанию.
+    # Интервал по сути динамический — определяется в самой команде из глобальных
+    # настроек протоколов. Параметр --interval здесь — это запасное значение,
+    # которое будет использоваться, если в БД ничего не настроено.
+    command: ["python", "manage.py", "poll_devices", "--loop", "--interval", "300"]
+
+  # ============================================================================
+  # Nginx (фронт-сервер)
+  # ============================================================================
+  # Раздаёт статику и медиа напрямую с диска (через X-Accel-Redirect для медиа,
+  # с проверкой прав на стороне Django). Проксирует остальные запросы на web.
+  nginx:
+    image: docker.io/library/nginx:alpine
+    container_name: webmap-nginx
+    restart: unless-stopped
+    networks:
+      - webmap_net
+    depends_on:
+      - web
+    volumes:
+      # Конфиг nginx
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      # Те же volume'ы, что у web — чтобы nginx видел те же файлы.
+      - webmap_static:/srv/static:ro
+      - webmap_media:/srv/media:ro
+    ports:
+      - "8000:80"
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/nginx-health"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+# Явная пользовательская сеть для всех сервисов.
+# Без неё podman-compose в rootless-режиме иногда создаёт сеть, в которой
+# контейнеры не могут друг с другом общаться (ошибка "Host is unreachable").
+# Имя webmap_net фиксированно: контейнеры обращаются друг к другу по
+# DNS-именам сервисов (db, web, nginx) внутри этой сети.
+networks:
+  webmap_net:
+    driver: bridge
 
 volumes:
   webmap_db_data:
   webmap_media:
+  webmap_static:

@@ -20,10 +20,24 @@ function csrfToken() {
 }
 
 let _lastErrorTime = 0;
+let _redirectingToLogin = false;
 async function apiFetch(url, options={}) {
     const defaults = { headers: {'Content-Type':'application/json', 'X-CSRFToken': csrfToken()} };
     try {
         const r = await fetch(API + url, {...defaults, ...options});
+
+        // Если сессия истекла — отправляем на страницу входа.
+        // 401 — DRF говорит «нет аутентификации», 403 — Django/DRF говорит
+        // «не хватает прав» (включая случай, когда пользователь анонимен).
+        if (r.status === 401 || r.status === 403) {
+            if (!_redirectingToLogin) {
+                _redirectingToLogin = true;
+                const next = encodeURIComponent(window.location.pathname + window.location.search);
+                window.location.href = '/accounts/login/?next=' + next;
+            }
+            return null;
+        }
+
         if (options.method === 'DELETE') {
             if (!r.ok) throw new Error(await r.text());
             return true;

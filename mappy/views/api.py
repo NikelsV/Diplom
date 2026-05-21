@@ -1,7 +1,8 @@
 import os
 from django.conf import settings
 from rest_framework import viewsets, status
-from rest_framework.decorators import action, api_view
+from rest_framework.decorators import action, api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from ..models import Region, City, Office, Floor, DeviceType, Device, Connection
 from ..serializers import (
@@ -13,6 +14,7 @@ from ..serializers import (
 class RegionViewSet(viewsets.ModelViewSet):
     queryset = Region.objects.all()
     serializer_class = RegionSerializer
+    permission_classes = [IsAuthenticated]
 
     @action(detail=True, methods=['post'], url_path='upload-map')
     def upload_map(self, request, pk=None):
@@ -28,6 +30,7 @@ class RegionViewSet(viewsets.ModelViewSet):
 class CityViewSet(viewsets.ModelViewSet):
     queryset = City.objects.all()
     serializer_class = CitySerializer
+    permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         qs = City.objects.all()
@@ -40,6 +43,7 @@ class CityViewSet(viewsets.ModelViewSet):
 class OfficeViewSet(viewsets.ModelViewSet):
     queryset = Office.objects.all()
     serializer_class = OfficeSerializer
+    permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         qs = Office.objects.all()
@@ -52,6 +56,7 @@ class OfficeViewSet(viewsets.ModelViewSet):
 class FloorViewSet(viewsets.ModelViewSet):
     queryset = Floor.objects.all()
     serializer_class = FloorSerializer
+    permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         qs = Floor.objects.all()
@@ -74,11 +79,13 @@ class FloorViewSet(viewsets.ModelViewSet):
 class DeviceTypeViewSet(viewsets.ModelViewSet):
     queryset = DeviceType.objects.all()
     serializer_class = DeviceTypeSerializer
+    permission_classes = [IsAuthenticated]
 
 
 class DeviceViewSet(viewsets.ModelViewSet):
     queryset = Device.objects.all()
     serializer_class = DeviceSerializer
+    permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         qs = Device.objects.all()
@@ -104,6 +111,7 @@ class DeviceViewSet(viewsets.ModelViewSet):
 class ConnectionViewSet(viewsets.ModelViewSet):
     queryset = Connection.objects.all()
     serializer_class = ConnectionSerializer
+    permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         qs = Connection.objects.all()
@@ -135,6 +143,7 @@ class ConnectionViewSet(viewsets.ModelViewSet):
 
 
 @api_view(['GET'])
+@permission_classes([IsAuthenticated])
 def builtin_icons(request):
     """Возвращает список предустановленных иконок устройств"""
     icons_dir = os.path.join(settings.BASE_DIR, 'mappy', 'static', 'mappy', 'icons')
